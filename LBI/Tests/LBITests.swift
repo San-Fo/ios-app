@@ -563,4 +563,57 @@ struct LBITests {
         _ = dto?.toDetail()
         #expect(MockMarker.firedSites.contains("BusinessDTO.toDetail.editorial"))
     }
+
+    // MARK: Live-payload regression (verbatim JSON captured from lbi.proxied.zone)
+
+    @Test func decodesRealVerifiedBusinessWithSale() throws {
+        // Captured from GET /businesses/{id} (owner view) on the live backend.
+        let json = """
+        {"_id":"6f0729cf-317a-4fb3-9f73-196044e4ab8a","ownerUserId":"02b0f3d1","name":"Leung's Master Tailoring","description":"Bespoke suits since 1979.","foundingYear":1979,"categories":["services"],"district":"central","location":{"address":"Central, Hong Kong Island","geo":{"type":"Point","coordinates":[114.1578,22.2816]}},"financialIntent":{"sale":{"targetAmount":2200000}},"verificationStatus":"verified","sale":{"stage":"commercialBidding","askingPrice":2200000,"financials":{"annualRevenue":2220000,"annualProfit":540000,"monthlyRent":48000,"leaseYearsRemaining":4,"staffCount":3,"inventoryValue":180000,"notes":"Established clientele."},"aiEvaluation":{"score":78,"verdict":"recommendedForCommercialBidding","strengths":["Established local presence"],"risks":["Automated estimate; verify financials independently"],"summary":"Preliminary automated assessment."},"includes":["Client archive","Brand & goodwill","Equipment"],"ownerWillingToStay":true,"handoverMonths":12,"commercialBiddingEndsAt":null,"retailFallback":null,"bids":[{"id":"47de76f7","bidderUserId":"5a27e8a4","bidderName":"M. Cheng","bidderGroupId":null,"amount":2050000,"message":"Committed to the bespoke model.","status":"submitted","createdAt":{"$date":{"$numberLong":"1780810613121"}}}]},"galleryImageUrls":[],"listingStatistics":{"viewCount":0,"likeCount":0},"createdAt":{"$date":{"$numberLong":"1780810582397"}},"owner":{"id":"02b0f3d1","name":"Leung Po-Wah","biography":null,"profileImageUrl":null}}
+        """
+        let dto = try JSONDecoder.lbiDefault.decode(BusinessDTO.self, from: Data(json.utf8))
+        #expect(dto.id == "6f0729cf-317a-4fb3-9f73-196044e4ab8a") // from `_id`
+        let detail = dto.toDetail()
+        #expect(detail.summary.name == "Leung's Master Tailoring")
+        #expect(detail.founderName == "Leung Po-Wah") // from owner.id-keyed summary
+        #expect(detail.summary.district == .central)
+        let sale = detail.professionalSale
+        #expect(sale?.stage == .commercialBidding)
+        #expect(sale?.aiEvaluation?.score == 78)
+        #expect(sale?.financials.staffCount == 3)
+        #expect(sale?.bids.first?.bidderName == "M. Cheng")
+        #expect(sale?.bids.first?.amount == 2_050_000)
+    }
+
+    @Test func decodesRealRedactedSaleForAnonViewer() throws {
+        // Captured from GET /businesses/{id} unauthenticated: financials null.
+        let json = """
+        {"_id":"6f0729cf","ownerUserId":"02b0f3d1","name":"Leung's","description":"d","categories":["services"],"district":"central","financialIntent":{"sale":{"targetAmount":2200000}},"verificationStatus":"verified","sale":{"stage":"commercialBidding","askingPrice":2200000,"financials":null,"aiEvaluation":{"score":78,"verdict":"recommendedForCommercialBidding","strengths":["x"],"risks":["y"],"summary":"s"},"includes":[],"ownerWillingToStay":true,"handoverMonths":12,"commercialBiddingEndsAt":null,"retailFallback":null,"bids":[]}}
+        """
+        let dto = try JSONDecoder.lbiDefault.decode(BusinessDTO.self, from: Data(json.utf8))
+        let sale = dto.toDetail().professionalSale
+        #expect(sale != nil)
+        // Redacted financials map to the zeroed placeholder.
+        #expect(sale?.financials == .redacted)
+        #expect(sale?.bids.isEmpty == true)
+    }
+
+    @Test func decodesRealConversationAndMessage() throws {
+        let convJSON = """
+        {"_id":"49896428","kind":"deal","businessId":"6f0729cf","participantIds":["02b0f3d1","5a27e8a4"],"createdAt":{"$date":{"$numberLong":"1780810613675"}}}
+        """
+        let conv = try JSONDecoder.lbiDefault.decode(ConversationDTO.self, from: Data(convJSON.utf8))
+        #expect(conv.id == "49896428") // from `_id`
+        #expect(conv.kind == "deal")
+        #expect(conv.participantIds?.count == 2)
+
+        let msgJSON = """
+        {"_id":"8f209c71","conversationId":"49896428","senderUserId":"02b0f3d1","body":"Welcome.","createdAt":{"$date":{"$numberLong":"1780810626852"}}}
+        """
+        let msg = try JSONDecoder.lbiDefault.decode(ChatMessageDTO.self, from: Data(msgJSON.utf8))
+        #expect(msg.id == "8f209c71")
+        let mine = msg.toDomain(currentUserId: "02b0f3d1")
+        #expect(mine.isCurrentUser)
+        #expect(mine.text == "Welcome.")
+    }
 }
