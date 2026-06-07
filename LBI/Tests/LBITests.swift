@@ -738,6 +738,30 @@ struct LBITests {
         #expect(labels.contains { $0.localizedCaseInsensitiveContains("financial statements") && $0.contains("4") })
     }
 
+    // MARK: Local bookmarks
+
+    @Test func localBookmarkStoreTogglesAndPersists() {
+        let suite = "test.bookmarks.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let store = LocalBookmarkStore(defaults: defaults)
+        #expect(store.all().isEmpty)
+        #expect(store.toggle("biz-1") == true)   // now saved
+        #expect(store.contains("biz-1"))
+        #expect(store.toggle("biz-1") == false)  // now unsaved
+        #expect(!store.contains("biz-1"))
+
+        // Persistence: a new instance over the same defaults sees saved ids.
+        store.toggle("biz-2")
+        let reopened = LocalBookmarkStore(defaults: defaults)
+        #expect(reopened.contains("biz-2"))
+
+        // Merge unions server ids without dropping local ones.
+        reopened.merge(["biz-3", "biz-2"])
+        #expect(reopened.all() == ["biz-2", "biz-3"])
+    }
+
     // MARK: Session restore
 
     @Test func restoreSessionClearsTokenOnUnauthorized() async throws {

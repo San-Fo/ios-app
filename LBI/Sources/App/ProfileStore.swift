@@ -20,10 +20,18 @@ final class ProfileStore {
 
     private let repository: ProfileRepository
     private let businessRepository: BusinessRepository
+    /// Durable, device-local source of truth for bookmarks (works offline / as
+    /// a guest, and survives relaunches even without a backend session).
+    private let bookmarks: LocalBookmarkStore
 
-    init(repository: ProfileRepository, businessRepository: BusinessRepository) {
+    init(
+        repository: ProfileRepository,
+        businessRepository: BusinessRepository,
+        bookmarks: LocalBookmarkStore = LocalBookmarkStore()
+    ) {
         self.repository = repository
         self.businessRepository = businessRepository
+        self.bookmarks = bookmarks
     }
 
     /// Whether the user owns at least one business (i.e. acts as an owner).
@@ -46,7 +54,15 @@ final class ProfileStore {
     func load(for user: AuthenticatedUser) async {
         isLoading = true
         defer { isLoading = false }
-        profile = try? await repository.loadProfile(user: user)
+        var loaded = try? await repository.loadProfile(user: user)
+        // Reconcile bookmarks: union server-saved ids into the durable local
+        // store, then make the local set the source of truth on the profile so
+        // the UI is consistent whether or not the backend is reachable.
+        if let serverSaved = loaded?.savedBusinessIds {
+            bookmarks.merge(serverSaved)
+        }
+        loaded?.savedBusinessIds = bookmarks.all()
+        profile = loaded
         await loadMyBusinesses()
     }
 
@@ -125,22 +141,37 @@ final class ProfileStore {
         }
     }
 
-    /// Toggles a business's saved/bookmarked state, with haptic feedback, and
-    /// syncs the change to the backend.
+    /// Toggles a business's saved/bookmarked state, with haptic feedback.
+    ///
+    /// The local store is the source of truth (so saving works as a guest,
+    /// offline, or when the backend save endpoint is unavailable). If a real
+    /// profile/session exists, the change is also mirrored into the profile and
+    /// best-effort synced to the backend.
     func toggleSaved(_ businessId: String) async {
-        guard let profile else { return }
-        let isSaved = profile.savedBusinessIds.contains(businessId)
-        Haptics.impact(isSaved ? .light : .medium)
-        await update { p in
-            if isSaved { p.savedBusinessIds.remove(businessId) }
-            else { p.savedBusinessIds.insert(businessId) }
+        let wasSaved = bookmarks.contains(businessId)
+        Haptics.impact(wasSaved ? .light : .medium)
+        let nowSaved = bookmarks.toggle(businessId)
+
+        // Mirror onto the in-memory profile (if loaded) for instant UI updates.
+        // Mutate directly rather than via `update`, which would re-PUT the whole
+        // profile; the dedicated save endpoint below is the right sync path.
+        if var p = profile {
+            if nowSaved { p.savedBusinessIds.insert(businessId) }
+            else { p.savedBusinessIds.remove(businessId) }
+            profile = p
         }
-        try? await repository.setSaved(businessId: businessId, saved: !isSaved)
+        // Best-effort backend sync; ignored if there's no valid session.
+        try? await repository.setSaved(businessId: businessId, saved: nowSaved)
     }
 
-    /// Whether the given business is currently saved by the user.
+    /// Whether the given business is currently saved by the user (local truth).
     func isSaved(_ businessId: String) -> Bool {
-        profile?.savedBusinessIds.contains(businessId) ?? false
+        bookmarks.contains(businessId)
+    }
+
+    /// All locally-saved business ids (source of truth for the Saved tab).
+    var savedBusinessIds: Set<String> {
+        bookmarks.all()
     }
 
     /// Seeds a profile directly (previews/tests only).

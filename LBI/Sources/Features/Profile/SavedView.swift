@@ -5,13 +5,8 @@ struct SavedView: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(ProfileStore.self) private var profileStore
 
-    @State private var all: [Business] = []
+    @State private var saved: [Business] = []
     @State private var isLoading = true
-
-    private var saved: [Business] {
-        let ids = profileStore.profile?.savedBusinessIds ?? []
-        return all.filter { ids.contains($0.id) }
-    }
 
     var body: some View {
         NavigationStack {
@@ -32,8 +27,13 @@ struct SavedView: View {
                             NavigationLink(value: business) {
                                 BusinessCard(
                                     business: business,
-                                    isSaved: true,
-                                    onSaveTapped: { Task { await profileStore.toggleSaved(business.id) } }
+                                    isSaved: profileStore.isSaved(business.id),
+                                    onSaveTapped: {
+                                        Task {
+                                            await profileStore.toggleSaved(business.id)
+                                            await load()
+                                        }
+                                    }
                                 )
                             }
                             .buttonStyle(.plain)
@@ -63,7 +63,21 @@ struct SavedView: View {
     }
 
     private func load() async {
-        all = (try? await environment.businessRepository.list(query: BusinessQuery())) ?? []
+        let ids = profileStore.savedBusinessIds
+        guard !ids.isEmpty else {
+            saved = []
+            isLoading = false
+            return
+        }
+        // Resolve each saved id directly so saved businesses appear even if they
+        // aren't in the (paginated/filtered) discovery list.
+        var results: [Business] = []
+        for id in ids {
+            if let detail = try? await environment.businessRepository.detail(id: id) {
+                results.append(detail.summary)
+            }
+        }
+        saved = results
         isLoading = false
     }
 }
