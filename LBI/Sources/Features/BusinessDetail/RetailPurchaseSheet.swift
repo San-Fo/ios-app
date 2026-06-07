@@ -38,7 +38,7 @@ struct RetailPurchaseSheet: View {
                 CardContainer {
                     VStack(alignment: .leading, spacing: Theme.Spacing.md) {
                         StatPill(label: "Owner-set public price", value: Money.hkd(offer.askingPrice, abbreviated: true), icon: "tag.fill")
-                        Text("This starts a conversation with the owner at the public fallback price. It is not a binding contract until diligence and documents are completed.")
+                        Text("This registers your interest to buy \(businessName) outright at the public fallback price. It is not a binding contract until diligence and documents are completed.")
                             .font(.lbiBody)
                             .inkSecondaryStyle()
                             .fixedSize(horizontal: false, vertical: true)
@@ -50,12 +50,12 @@ struct RetailPurchaseSheet: View {
             .padding(Theme.Spacing.lg)
         }
         .safeAreaInset(edge: .bottom) {
-            PrimaryButton("Accept & open deal chat", systemImage: "checkmark.seal.fill", isLoading: isSubmitting, isEnabled: !name.trimmingCharacters(in: .whitespaces).isEmpty) {
+            PrimaryButton("Confirm purchase interest", systemImage: "cart.fill", isLoading: isSubmitting, isEnabled: !name.trimmingCharacters(in: .whitespaces).isEmpty) {
                 Task {
                     isSubmitting = true
-                    let opened = await onConfirm(name.trimmingCharacters(in: .whitespaces))
+                    let ok = await onConfirm(name.trimmingCharacters(in: .whitespaces))
                     isSubmitting = false
-                    if opened { dismiss() } else { submitted = true }
+                    if ok { submitted = true }
                 }
             }
             .padding(Theme.Spacing.lg)
@@ -66,10 +66,8 @@ struct RetailPurchaseSheet: View {
     private var successView: some View {
         VStack(spacing: Theme.Spacing.md) {
             Spacer()
-            Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(Theme.Palette.jade)
-            Text("Purchase intent sent")
+            SuccessCheckmark(tint: Theme.Palette.jade)
+            Text("Purchase interest sent")
                 .font(.lbiTitle)
                 .inkStyle()
             Text("The owner will be notified that you want to buy \(businessName) outright at the fallback price.")

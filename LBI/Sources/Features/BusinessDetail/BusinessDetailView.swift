@@ -99,8 +99,8 @@ struct BusinessDetailView: View {
         }
         .sheet(isPresented: $showRetailPurchase) {
             if let sale = detail.professionalSale, let offer = sale.retailFallbackOffer {
-                RetailPurchaseSheet(businessName: detail.summary.name, offer: offer) { buyerName in
-                    await acceptRetailPurchase(saleId: sale.id, buyerName: buyerName)
+                RetailPurchaseSheet(businessName: detail.summary.name, offer: offer) { _ in
+                    await acceptRetailPurchase(businessId: detail.id, businessName: detail.summary.name)
                 }
             }
         }
@@ -531,11 +531,17 @@ struct BusinessDetailView: View {
     }
 
     @MainActor
-    private func acceptRetailPurchase(saleId: String, buyerName: String) async -> Bool {
-        guard let result = try? await environment.saleRepository.acceptRetailPurchase(saleId: saleId, buyerName: buyerName) else { return false }
-        detail?.professionalSale = result.sale
-        openedDeal = result.conversation
-        return true
+    private func acceptRetailPurchase(businessId: String, businessName: String) async -> Bool {
+        // Retail outright purchase is recorded as a `purchase` action — the
+        // backend's supported path (there is no separate accept-with-chat
+        // endpoint for retail buyers).
+        let record = try? await environment.listingRepository.recordInvestment(
+            businessId: businessId,
+            businessName: businessName,
+            kind: .fullAcquisition,
+            amount: 0
+        )
+        return record != nil
     }
 
     @MainActor

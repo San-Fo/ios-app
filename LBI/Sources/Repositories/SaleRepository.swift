@@ -19,8 +19,6 @@ protocol SaleRepository: Sendable {
     func acceptBid(saleId: String, bidId: String) async throws -> AcceptedOffer
     /// The owner accepts a takeover group's offer (may be below ask); opens a deal conversation.
     func acceptGroupOffer(saleId: String, offerId: String) async throws -> AcceptedOffer
-    /// A solo retail buyer accepts the public fallback price; opens a deal conversation.
-    func acceptRetailPurchase(saleId: String, buyerName: String) async throws -> AcceptedOffer
     /// The owner rejects commercial bids and opens the sale to retail buyers / takeover groups.
     func declineCommercialBids(saleId: String, retailAskingPrice: Decimal, allowOutrightPurchase: Bool, allowGroupTakeover: Bool) async throws -> ProfessionalSale
 }
@@ -65,14 +63,6 @@ final class LiveSaleRepository: SaleRepository, @unchecked Sendable {
         // A group offer is materialised as a normal bid (tagged bidderGroupId),
         // so accepting it uses the same accept-bid endpoint.
         try await acceptBid(saleId: saleId, bidId: offerId)
-    }
-
-    func acceptRetailPurchase(saleId: String, buyerName: String) async throws -> AcceptedOffer {
-        // NO_BACKEND: no "accept retail purchase" endpoint; a retail buyer records
-        // a purchase Action instead, and there is no deal chat for it.
-        // TODO(API): add a retail-purchase accept + conversation if needed.
-        MockMarker.hit(.noBackend, "Live.acceptRetailPurchase", "no retail-purchase accept endpoint")
-        throw APIError.notFound
     }
 
     func declineCommercialBids(saleId: String, retailAskingPrice: Decimal, allowOutrightPurchase: Bool, allowGroupTakeover: Bool) async throws -> ProfessionalSale {
@@ -207,28 +197,6 @@ final class MockSaleRepository: SaleRepository, @unchecked Sendable {
             dealKind: .groupTakeover,
             amount: result.1.amount,
             counterparty: result.1.groupName
-        )
-        dealChat?.register(conversation)
-        return AcceptedOffer(sale: result.0, conversation: conversation)
-    }
-
-    func acceptRetailPurchase(saleId: String, buyerName: String) async throws -> AcceptedOffer {
-        let result: (ProfessionalSale, Decimal) = try mutex.withLock {
-            guard let key = sales.first(where: { $0.value.id == saleId })?.key,
-                  var sale = sales[key] else {
-                throw APIError.notFound
-            }
-            let amount = sale.retailFallbackOffer?.askingPrice ?? sale.askingPrice
-            sale.stage = .accepted
-            sales[key] = sale
-            return (sale, amount)
-        }
-
-        let conversation = Self.makeConversation(
-            sale: result.0,
-            dealKind: .soloBuyer,
-            amount: result.1,
-            counterparty: buyerName
         )
         dealChat?.register(conversation)
         return AcceptedOffer(sale: result.0, conversation: conversation)
