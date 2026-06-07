@@ -29,9 +29,11 @@ struct APIConfiguration {
     /// The active environment.
     var environment: Environment
 
-    /// When `true`, repositories use in-memory mock implementations instead of
-    /// hitting the network. This exists ONLY for development, SwiftUI previews
-    /// and tests. The production path never enables this.
+    /// ⚠️ MASTER MOCK SWITCH.
+    /// When `true`, EVERY repository uses in-memory mock data (see the `Mock*`
+    /// classes) and NOTHING hits the backend. Flip to `false` to use the real
+    /// API. While `true`, the app prints a loud banner at launch and each mock
+    /// path logs via `MockMarker`. The production build must ship with `false`.
     var useMockData: Bool
 
     /// Default request timeout in seconds.
@@ -41,7 +43,10 @@ struct APIConfiguration {
 
     static let live = APIConfiguration(
         environment: .development,
-        useMockData: true, // TODO(API): flip to `false` once real endpoints exist.
+        // ⚠️ MOCK MODE IS ON. The app is running entirely on in-memory sample
+        // data — no request reaches the backend. Set this to `false` to switch
+        // every repository to the real API (`LiveAPIClient` + `Live*Repository`).
+        useMockData: true,
         timeout: 30
     )
 

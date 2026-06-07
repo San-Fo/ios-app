@@ -59,7 +59,8 @@ final class LiveAuthService: AuthService, @unchecked Sendable {
     }
 }
 
-/// In-memory mock for previews/tests/dev (no network, no Apple flow).
+/// ⚠️ MOCK — no network, no Apple verification. Returns a stubbed user.
+/// Active only when `APIConfiguration.useMockData == true`.
 final class MockAuthService: AuthService, @unchecked Sendable {
     private let tokenStore: TokenStore
     var stubbedUser: AuthenticatedUser
@@ -73,12 +74,14 @@ final class MockAuthService: AuthService, @unchecked Sendable {
     }
 
     func signInWithApple(_ credential: AppleCredential) async throws -> AuthenticatedUser {
+        MockMarker.hit(.mock, "MockAuthService.signInWithApple", "no Apple verification; stub token + user")
         tokenStore.save(token: "mock-token")
         return stubbedUser
     }
 
     func restoreSession() async throws -> AuthenticatedUser? {
-        tokenStore.currentToken() != nil ? stubbedUser : nil
+        MockMarker.hit(.mock, "MockAuthService.restoreSession")
+        return tokenStore.currentToken() != nil ? stubbedUser : nil
     }
 
     func signOut() async {

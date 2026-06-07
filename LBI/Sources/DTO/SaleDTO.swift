@@ -65,14 +65,15 @@ struct SaleEvaluationDTO: Decodable {
 
     func toDomain() -> SaleEvaluation {
         let mappedVerdict = EvaluationVerdict(rawValue: verdict) ?? .needsManualReview
+        // DERIVED: backend's aiEvaluation has no recommendedAction/confidence;
+        // recommendedAction is mapped from the verdict and confidence defaulted.
+        MockMarker.hit(.derived, "SaleEvaluation.recommendedAction", "mapped from verdict; confidence defaulted")
         return SaleEvaluation(
             score: score,
             verdict: mappedVerdict,
             strengths: strengths ?? [],
             risks: risks ?? [],
             summary: summary ?? "",
-            // recommendedAction/confidence are not provided by the backend;
-            // derive a sensible action from the verdict, leave confidence default.
             recommendedAction: Self.recommendedAction(for: mappedVerdict),
             confidence: 0.8
         )

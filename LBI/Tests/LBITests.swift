@@ -507,4 +507,29 @@ struct LBITests {
         profile.verifications[.kyc] = .approved
         #expect(profile.tier == .verifiedSupporter)
     }
+
+    // MARK: Mock instrumentation
+
+    @Test func mockReposFireMockMarker() async throws {
+        // Exercising a mock repository must record a MOCK marker site, so the
+        // "is this real data?" audit (no MOCK sites with useMockData=false) works.
+        MockMarker.reset()
+        let repo = MockBusinessRepository()
+        _ = try await repo.list(query: BusinessQuery())
+        #expect(MockMarker.firedSites.contains("MockBusinessRepository"))
+        #expect(MockMarker.firedSites.contains("MockBusinessRepository.list"))
+    }
+
+    @Test func derivedEditorialFiresDerivedMarker() {
+        // Deriving editorial content from the server Business records a DERIVED
+        // marker (expected even on the real-data path).
+        MockMarker.reset()
+        let dto = try? JSONDecoder.lbiDefault.decode(BusinessDTO.self, from: Data("""
+        { "id": "x", "ownerUserId": "o", "name": "N", "description": "d",
+          "categories": ["retail"], "district": "central",
+          "financialIntent": { "sale": { "targetAmount": 1 } } }
+        """.utf8))
+        _ = dto?.toDetail()
+        #expect(MockMarker.firedSites.contains("BusinessDTO.toDetail.editorial"))
+    }
 }

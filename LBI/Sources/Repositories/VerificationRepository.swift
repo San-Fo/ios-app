@@ -49,10 +49,11 @@ final class LiveVerificationRepository: VerificationRepository, @unchecked Senda
             let dto = try await client.send(try VerificationEndpoints.verifyMe(institutional: institutional))
             return outcome(for: kind, from: dto)
         case .kyb:
-            // KYB is per-business on the backend (POST /businesses/{id}/verify)
-            // and cannot be completed from the generic user flow. Surfaced as
-            // pending until performed from a specific listing.
+            // NO_BACKEND (generic flow): KYB is per-business on the backend
+            // (POST /businesses/{id}/verify) and cannot be completed without a
+            // business id. Surfaced as pending until done from a listing screen.
             // TODO(API): drive KYB from the owner's listing screen with a business id.
+            MockMarker.hit(.noBackend, "Live.verifyKYB.generic", "KYB needs a businessId; use listing screen")
             return VerificationOutcome(
                 record: VerificationRecord(kind: .kyb, status: .pending, submittedAt: Date()),
                 grantedRole: nil
@@ -61,9 +62,10 @@ final class LiveVerificationRepository: VerificationRepository, @unchecked Senda
     }
 
     func skipWithOverride(kind: VerificationKind) async throws -> VerificationOutcome {
-        // The backend has no skip/override endpoint; treat a demo skip as a
-        // standard submission (the mock backend auto-approves).
-        try await submit(kind: kind, documentLabels: [])
+        // NO_BACKEND: there is no skip/override endpoint; a demo skip is treated
+        // as a standard submission (which the mock backend auto-approves).
+        MockMarker.hit(.noBackend, "Live.verifySkipOverride", "no skip endpoint; falls back to submit")
+        return try await submit(kind: kind, documentLabels: [])
     }
 
     /// Builds an outcome from the User returned by `POST /me/verify`.
@@ -82,18 +84,22 @@ final class LiveVerificationRepository: VerificationRepository, @unchecked Senda
 /// status AND decides the role grant, mirroring how the real server behaves:
 /// passing/overriding KYB grants the owner role, pro-investor grants the
 /// professional role, and KYC grants no elevated role.
+/// ⚠️ MOCK — auto-approves every submission instantly; stores no documents.
+/// Active only when `APIConfiguration.useMockData == true`.
 final class MockVerificationRepository: VerificationRepository, @unchecked Sendable {
     private let mutex = Mutex()
     private var records: [VerificationKind: VerificationRecord] = [:]
 
     func records() async throws -> [VerificationRecord] {
-        mutex.withLock {
+        MockMarker.hit(.mock, "MockVerificationRepository.records")
+        return mutex.withLock {
             VerificationKind.allCases.map { records[$0] ?? VerificationRecord(kind: $0) }
         }
     }
 
     func submit(kind: VerificationKind, documentLabels: [String]) async throws -> VerificationOutcome {
-        mutex.withLock {
+        MockMarker.hit(.mock, "MockVerificationRepository.submit", "auto-approves; no document review")
+        return mutex.withLock {
             // Demo backend auto-approves a complete submission.
             let record = VerificationRecord(kind: kind, status: .approved, submittedAt: Date())
             records[kind] = record
@@ -102,7 +108,8 @@ final class MockVerificationRepository: VerificationRepository, @unchecked Senda
     }
 
     func skipWithOverride(kind: VerificationKind) async throws -> VerificationOutcome {
-        mutex.withLock {
+        MockMarker.hit(.mock, "MockVerificationRepository.skipWithOverride", "grants role despite skip")
+        return mutex.withLock {
             // Override path: the server grants the role despite a skipped check.
             let record = VerificationRecord(kind: kind, status: .skipped, submittedAt: Date())
             records[kind] = record

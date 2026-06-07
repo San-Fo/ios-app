@@ -92,7 +92,10 @@ struct BusinessDTO: Decodable {
 
     /// The full detail model. Editorial content is derived (see type doc).
     func toDetail() -> BusinessDetail {
-        BusinessDetail(
+        // DERIVED: the backend has no authored story/memories/rewards; these are
+        // synthesized from `description`/`owner`. Expected on the real path too.
+        MockMarker.hit(.derived, "BusinessDTO.toDetail.editorial", "founderStory/whyItMatters/memories/rewards derived")
+        return BusinessDetail(
             id: id,
             summary: toSummary(),
             tagline: description,

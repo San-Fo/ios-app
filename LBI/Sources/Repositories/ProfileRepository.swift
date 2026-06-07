@@ -44,13 +44,15 @@ final class LiveProfileRepository: ProfileRepository, @unchecked Sendable {
 
 // MARK: - Mock
 
-/// In-memory mock that persists changes for the lifetime of the app session.
+/// ⚠️ MOCK — in-memory profile, persists only for the app session. No backend.
+/// Active only when `APIConfiguration.useMockData == true`.
 final class MockProfileRepository: ProfileRepository, @unchecked Sendable {
     private let mutex = Mutex()
     private var stored: UserProfile?
 
     func loadProfile(user: AuthenticatedUser) async throws -> UserProfile {
-        mutex.withLock {
+        MockMarker.hit(.mock, "MockProfileRepository.loadProfile")
+        return mutex.withLock {
             if let stored { return stored }
             let profile = UserProfile.empty(
                 id: user.id,

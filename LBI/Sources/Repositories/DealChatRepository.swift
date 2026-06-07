@@ -72,8 +72,9 @@ final class LiveDealChatRepository: DealChatRepository, @unchecked Sendable {
     }
 
     func updateStatus(conversationId: String, status: DealStatus) async throws -> DealConversation {
-        // The backend has no deal-status concept; re-fetch the conversation.
+        // NO_BACKEND: the backend has no deal-status concept; re-fetch instead.
         // TODO(API): add a status endpoint if deal lifecycle state is needed.
+        MockMarker.hit(.noBackend, "Live.dealUpdateStatus", "no deal status endpoint")
         guard let convo = try await conversation(id: conversationId) else { throw APIError.notFound }
         return convo
     }
@@ -85,8 +86,9 @@ final class LiveDealChatRepository: DealChatRepository, @unchecked Sendable {
 
 // MARK: - Mock
 
-/// In-memory mock that simulates a server-backed conversation, including an
-/// occasional reply from the counterparty so polling has something to surface.
+/// ⚠️ MOCK — in-memory conversations with a canned auto-reply from the
+/// "counterparty". No real second participant, no server.
+/// Active only when `APIConfiguration.useMockData == true`.
 final class MockDealChatRepository: DealChatRepository, @unchecked Sendable {
     private let mutex = Mutex()
     private var conversations: [String: DealConversation] = [:]
@@ -108,6 +110,7 @@ final class MockDealChatRepository: DealChatRepository, @unchecked Sendable {
     }
 
     func sendMessage(conversationId: String, text: String) async throws -> DealMessage {
+        MockMarker.hit(.mock, "MockDealChatRepository.sendMessage", "canned counterparty auto-reply")
         let message = DealMessage(
             id: UUID().uuidString,
             authorName: "You",

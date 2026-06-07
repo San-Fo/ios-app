@@ -44,9 +44,13 @@ final class LiveBusinessRepository: BusinessRepository, @unchecked Sendable {
 
 // MARK: - Mock
 
-/// In-memory mock used for development, previews and tests.
+/// ⚠️ MOCK — in-memory business data (see `SampleData`). No backend.
+/// Active only when `APIConfiguration.useMockData == true`.
 final class MockBusinessRepository: BusinessRepository, @unchecked Sendable {
+    init() { MockMarker.hit(.mock, "MockBusinessRepository", "discover/search/detail use SampleData") }
+
     func recommended(for profile: UserProfile?) async throws -> [Business] {
+        MockMarker.hit(.mock, "MockBusinessRepository.recommended")
         let all = SampleData.summaries
         guard let profile, !profile.interests.isEmpty || !profile.districts.isEmpty else {
             return all
@@ -63,7 +67,8 @@ final class MockBusinessRepository: BusinessRepository, @unchecked Sendable {
     }
 
     func list(query: BusinessQuery) async throws -> [Business] {
-        SampleData.summaries.filter { business in
+        MockMarker.hit(.mock, "MockBusinessRepository.list")
+        return SampleData.summaries.filter { business in
             let matchesText = query.text.isEmpty
                 || business.name.localizedCaseInsensitiveContains(query.text)
                 || business.storyHeadline.localizedCaseInsensitiveContains(query.text)
@@ -76,6 +81,7 @@ final class MockBusinessRepository: BusinessRepository, @unchecked Sendable {
     }
 
     func detail(id: String) async throws -> BusinessDetail {
+        MockMarker.hit(.mock, "MockBusinessRepository.detail")
         guard let detail = SampleData.detail(for: id) else { throw APIError.notFound }
         return detail
     }

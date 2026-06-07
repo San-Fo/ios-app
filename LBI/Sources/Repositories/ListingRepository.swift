@@ -104,12 +104,16 @@ final class LiveListingRepository: ListingRepository, @unchecked Sendable {
 
 // MARK: - Mock
 
+/// ⚠️ MOCK — listing submission and actions are no-ops that fake success.
+/// Active only when `APIConfiguration.useMockData == true`.
 final class MockListingRepository: ListingRepository, @unchecked Sendable {
     func submitListing(_ draft: ListingDraft) async throws {
+        MockMarker.hit(.mock, "MockListingRepository.submitListing", "fakes success; nothing persisted")
         try await Task.sleep(nanoseconds: 400_000_000)
     }
 
     func recordInvestment(businessId: String, businessName: String, kind: FundingKind, amount: Decimal) async throws -> InvestmentRecord {
+        MockMarker.hit(.mock, "MockListingRepository.recordInvestment", "fakes an action; no payment")
         try await Task.sleep(nanoseconds: 400_000_000)
         return InvestmentRecord(
             id: UUID().uuidString,

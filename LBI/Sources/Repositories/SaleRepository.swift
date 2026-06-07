@@ -68,9 +68,10 @@ final class LiveSaleRepository: SaleRepository, @unchecked Sendable {
     }
 
     func acceptRetailPurchase(saleId: String, buyerName: String) async throws -> AcceptedOffer {
-        // The backend has no "accept retail purchase" endpoint; a retail buyer
-        // records a purchase Action instead, and there is no deal chat for it.
+        // NO_BACKEND: no "accept retail purchase" endpoint; a retail buyer records
+        // a purchase Action instead, and there is no deal chat for it.
         // TODO(API): add a retail-purchase accept + conversation if needed.
+        MockMarker.hit(.noBackend, "Live.acceptRetailPurchase", "no retail-purchase accept endpoint")
         throw APIError.notFound
     }
 
@@ -113,6 +114,8 @@ final class LiveSaleRepository: SaleRepository, @unchecked Sendable {
 
 // MARK: - Mock
 
+/// ⚠️ MOCK — in-memory sales/bids/AI evaluations from `SampleData`. No backend.
+/// Active only when `APIConfiguration.useMockData == true`.
 final class MockSaleRepository: SaleRepository, @unchecked Sendable {
     private var sales: [String: ProfessionalSale]
     private let mutex = Mutex()
@@ -121,6 +124,7 @@ final class MockSaleRepository: SaleRepository, @unchecked Sendable {
     private let dealChat: DealChatRepository?
 
     init(dealChat: DealChatRepository? = nil) {
+        MockMarker.hit(.mock, "MockSaleRepository", "sales/bids/AI from SampleData")
         var dict: [String: ProfessionalSale] = [:]
         for sale in SampleData.professionalSales { dict[sale.businessId] = sale }
         sales = dict

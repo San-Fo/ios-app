@@ -69,19 +69,23 @@ final class LiveTakeoverRepository: TakeoverRepository, @unchecked Sendable {
     }
 
     func askFounder(groupId: String, question: String) async throws -> FounderQA {
-        // No backend founder-Q&A endpoint; return a local echo so the UI flows.
+        // NO_BACKEND: no founder-Q&A endpoint; return a local echo so the UI flows.
         // TODO(API): add a founder Q&A endpoint if this feature is kept.
-        FounderQA(id: UUID().uuidString, question: question, answer: nil, askedBy: "You")
+        MockMarker.hit(.noBackend, "Live.askFounder", "no founder Q&A endpoint")
+        return FounderQA(id: UUID().uuidString, question: question, answer: nil, askedBy: "You")
     }
 }
 
 // MARK: - Mock
 
+/// ⚠️ MOCK — in-memory takeover groups/channels. No backend.
+/// Active only when `APIConfiguration.useMockData == true`.
 final class MockTakeoverRepository: TakeoverRepository, @unchecked Sendable {
     private let mutex = Mutex()
     private var groups: [String: TakeoverGroup]
 
     init() {
+        MockMarker.hit(.mock, "MockTakeoverRepository", "groups/chat from SampleData")
         var dict: [String: TakeoverGroup] = [:]
         for group in SampleData.takeoverGroups { dict[group.businessId] = group }
         groups = dict

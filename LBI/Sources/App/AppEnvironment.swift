@@ -1,4 +1,5 @@
 import Observation
+import os
 
 /// Dependency container holding the app's services and repositories.
 ///
@@ -7,6 +8,7 @@ import Observation
 /// mocks exist only for development, previews and tests.
 @Observable
 final class AppEnvironment {
+    private static let logger = Logger(subsystem: "dev.tuist.LBI", category: "startup")
     let configuration: APIConfiguration
     let authService: AuthService
     let businessRepository: BusinessRepository
@@ -19,6 +21,13 @@ final class AppEnvironment {
 
     init(configuration: APIConfiguration = .live) {
         self.configuration = configuration
+
+        // Loud, unmissable announcement of the data source at launch.
+        if configuration.useMockData {
+            Self.logger.warning("🟠🟠🟠 MOCK MODE — all data is in-memory sample data; NOTHING hits the backend. Set APIConfiguration.useMockData=false for real data. 🟠🟠🟠")
+        } else {
+            Self.logger.notice("🟢 LIVE MODE — using backend at \(configuration.baseURL.absoluteString, privacy: .public)")
+        }
 
         let tokenStore: TokenStore = configuration.useMockData
             ? InMemoryTokenStore()
