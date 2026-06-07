@@ -66,18 +66,38 @@ These `DERIVED` markers will still fire on the real path — that's fine.
 
 ---
 
-## 3. NO_BACKEND — features with no endpoint yet
+## 3. Backend gaps — outstanding tasks (DO NOT FORGET)
 
-These currently no-op / echo on the live path and need a decision or endpoint:
+The app has UI/flows ready and waiting on these. Ordered by priority.
 
-| Site | What it does now | Ask |
+### In flight (app fully ready; just needs the server)
+| # | Gap | Endpoint / change needed | App side |
+|---|---|---|---|
+| 1 | **Image upload** | multipart or pre-signed URL upload returning a hosted URL | Wired behind `ImageUploader` seam (`LiveImageUploader.upload`); currently emits base64 `data:` URLs. One-file swap. Used by business gallery + listing photos. |
+| 2 | **Apple Sign-In verification** | `POST /auth/apple` must verify the Apple identity token server-side | Fully wired (`LiveAuthService.signInWithApple` sends the real token). |
+
+### High — tappable controls that silently fake success today
+| # | Gap | Endpoint needed | App side |
+|---|---|---|---|
+| 3 | **Community memories** | `POST /businesses/{id}/memories` | `Live.addMemory` echoes locally (`NO_BACKEND`); memory vanishes after the session. |
+| 4 | **Ask a question / contact owner** | submit a question/message to the business team | `AskQuestionView` "Send question" has **no handler** — shows a fake "sent" and discards the text. |
+
+### Medium — partly built, workaround in place
+| # | Gap | Endpoint needed | App side |
+|---|---|---|---|
+| 5 | **Deal status lifecycle** | mark payment pending / completed / cancel | Deal-chat menu offers all three; `Live.dealUpdateStatus` is a silent no-op (re-fetches). |
+| 6 | **Founder Q&A** | ask/answer a founder question | `Live.askFounder` is a local echo **and has no UI caller**; section only displays existing Q&A. |
+| 7 | **Richer search filters** | `GET /businesses/search` should honor `district`, funding/availability, and **multiple** categories (today: only `q` + one `category`) | Filters applied client-side in `BusinessQuery.matches` as a workaround — only filters the returned page, not ideal for pagination. |
+
+### Low / product decision
+| # | Gap | Notes |
 |---|---|---|
-| `Live.askFounder` | returns a local echo | Add a founder-Q&A endpoint, or we drop the feature. |
-| `Live.dealUpdateStatus` | re-fetches, ignores status | Add deal lifecycle status (negotiating / paymentPending / completed), or we keep it client-only. |
-| `Live.acceptRetailPurchase` | throws `notFound` | Add a retail-purchase accept that opens a deal conversation, or confirm retail purchase is only a `purchase` Action with no chat. |
-| `Live.verifySkipOverride` | falls back to `submit` | Confirm there is no "skip/override grant" endpoint; we treat skip as submit. |
+| 8 | **`joinTakeover` user intent** | No server representation; `UserIntent.joinTakeover.serverIntent` returns `nil`, so the selection is dropped on save. Decide whether to add it. |
+| 9 | **Equity / partial-ownership action** | Actions API supports only `purchase` / `donation` / `revenueShareLoan`. "Partial Ownership" is recorded as a donation (round-tripped consistently). A real equity action would make it faithful. |
+| 10 | **Tokenized marketplace (Web3)** | **STUB only — no server.** `TokenMarketplaceView`, gated to verified commercial investors. Needs: token issuance per business, order book / trade endpoints, wallet linkage, settlement. See section 6. |
+| 11 | **Verification skip/override** | `Live.verifySkipOverride` falls back to `submit`. Confirm there is no "skip/override grant" endpoint; we treat skip as submit. |
 
-KYB is now wired correctly: after the listing flow creates the business
+KYB is wired correctly: after the listing flow creates the business
 (`POST /businesses`), it immediately prompts `BusinessVerificationView`, which
 calls `verifyBusiness(businessId:)` → `POST /businesses/{id}/verify`, locking the
 listing to a verified KYB and granting the owner role. The generic verification
@@ -85,7 +105,7 @@ section no longer offers KYB.
 
 ---
 
-## 4. What we still need from the backend
+## 4. What we still need from the backend (logistics)
 
 1. **Dev instance details** to run end-to-end: required envs are
    `MONGODB_URI`, `DATABASE_NAME`, `APPLE_BUNDLE_ID`, `DEV_AUTH=1`. Please share
@@ -98,7 +118,7 @@ section no longer offers KYB.
 4. **Current user id for chat attribution**: we tag messages "You" by comparing
    `senderUserId` to the local user id. Confirm `GET /me`'s `id` equals the
    `senderUserId`/`participantIds` values (it should — just confirming).
-5. **Decisions on the NO_BACKEND items in section 3.**
+5. **Decisions on the gap items in section 3.**
 6. **Confidence/recommendedAction on `aiEvaluation`**: optional — say if you'd
    rather provide them than have us derive.
 
@@ -110,5 +130,24 @@ These are normal UI affordances, not fake data, and need no backend:
 
 - `RemoteImage` loading placeholder.
 - Text-field placeholders in listing/onboarding/forms.
-- `ListingFlowView.photoPlaceholder` (photo upload is not yet wired — see the
-  `TODO(API): photo upload` in `LiveListingRepository`).
+- Listing photos are hosted via the `ImageUploader` seam (data URLs until the
+  real upload endpoint lands — see gap #1).
+
+---
+
+## 6. Tokenized marketplace (STUB — no server)
+
+`TokenMarketplaceView` is an **example stump** for a future Web3 feature: small/
+medium businesses get tokenized and traded as on-chain shares. It is:
+
+- **Gated** to verified commercial investors only (`profile.isInstitutionalInvestor`).
+- **Entirely client-side sample data** — every site fires `MockMarker.hit(.mock, ...)`.
+  No wallet, no chain, no orders are real.
+
+To make it real, the backend/chain would need at minimum:
+- Token issuance per business (supply, symbol, decimals, contract address).
+- An order book + trade/match endpoints (or a DEX integration).
+- Wallet linkage to the user account and on-chain settlement.
+- Holdings/positions per user and price history.
+
+This is a stub to demo the concept; do not treat any number in it as real.

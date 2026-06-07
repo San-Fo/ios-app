@@ -43,6 +43,11 @@ struct MainTabView: View {
                 InvestorOpportunitiesView()
             }
 
+            // STUB (no backend): tokenized marketplace, verified-investor only.
+            Tab("Market", systemImage: "bitcoinsign.circle.fill") {
+                TokenMarketplaceView()
+            }
+
             // Commercial investors who also own a business keep their desk.
             if isOwner {
                 Tab("My Business", systemImage: "storefront.fill") { OwnerDashboardView() }
