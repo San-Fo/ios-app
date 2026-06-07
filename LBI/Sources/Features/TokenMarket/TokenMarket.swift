@@ -12,6 +12,8 @@ struct BusinessToken: Identifiable, Equatable {
     let symbol: String
     let businessName: String
     let district: District
+    /// On-chain ERC-20 contract address for the business's equity token (stub).
+    let contractAddress: String
     /// Last traded price per token, in HK$.
     let lastPrice: Decimal
     /// 24h price change, as a fraction (e.g. 0.042 = +4.2%).
@@ -62,6 +64,7 @@ enum TokenMarketSampleData {
                 symbol: "WONG",
                 businessName: "Wong's Noodle Shop",
                 district: .shamShuiPo,
+                contractAddress: "0x7a3f…C1b9",
                 lastPrice: 12.40,
                 change24h: 0.042,
                 totalSupply: 100_000,
@@ -74,6 +77,7 @@ enum TokenMarketSampleData {
                 symbol: "LEUNG",
                 businessName: "Leung's Master Tailoring",
                 district: .central,
+                contractAddress: "0x4d21…9Fe2",
                 lastPrice: 48.75,
                 change24h: -0.013,
                 totalSupply: 50_000,
@@ -86,6 +90,7 @@ enum TokenMarketSampleData {
                 symbol: "PEAK",
                 businessName: "Peak Bookstore",
                 district: .wanChai,
+                contractAddress: "0x9c08…2A77",
                 lastPrice: 6.20,
                 change24h: 0.118,
                 totalSupply: 200_000,
@@ -98,6 +103,7 @@ enum TokenMarketSampleData {
                 symbol: "HERB",
                 businessName: "Tin Hau Herbal Hall",
                 district: .tinHau,
+                contractAddress: "0x1e57…B403",
                 lastPrice: 21.05,
                 change24h: 0.006,
                 totalSupply: 75_000,

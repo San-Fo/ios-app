@@ -58,9 +58,17 @@ struct TokenMarketplaceView: View {
             Text("Token Market")
                 .font(.lbiHero)
                 .inkStyle()
-            Text("Trade tokenized shares of verified Hong Kong businesses, settled on-chain.")
+            Text("Trade tokenized shares of verified Hong Kong businesses on Web3 infrastructure, settled on-chain.")
                 .font(.lbiBody)
                 .inkSecondaryStyle()
+            HStack(spacing: 6) {
+                Image(systemName: "link")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Theme.Palette.jade)
+                Text("Web3 · ERC-20 equity tokens")
+                    .font(.lbiLabel)
+                    .inkSecondaryStyle()
+            }
         }
     }
 
@@ -68,7 +76,7 @@ struct TokenMarketplaceView: View {
         HStack(spacing: Theme.Spacing.sm) {
             Image(systemName: "cube.transparent.fill")
                 .foregroundStyle(Theme.Palette.gold)
-            Text("Concept preview — no live wallet, chain or settlement is connected. All figures are illustrative.")
+            Text("Concept preview — Web3 settlement layer not yet connected; no live wallet or smart contract is linked. All figures are illustrative.")
                 .font(.lbiCaption)
                 .inkSecondaryStyle()
                 .fixedSize(horizontal: false, vertical: true)
@@ -81,7 +89,7 @@ struct TokenMarketplaceView: View {
 
     private var portfolioSummary: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            SectionHeader(title: "Your positions", subtitle: "Tokenized holdings in your linked wallet")
+            SectionHeader(title: "Your positions", subtitle: "Tokenized holdings in your linked Web3 wallet")
             if holdings.isEmpty {
                 CardContainer { Text("No token positions yet.").font(.lbiBody).inkSecondaryStyle() }
             } else {
@@ -98,7 +106,7 @@ struct TokenMarketplaceView: View {
 
     private var listingsSection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            SectionHeader(title: "Listed tokens", subtitle: "Verified businesses with an active order book")
+            SectionHeader(title: "Listed tokens", subtitle: "Verified businesses with an on-chain order book")
             ForEach(listings) { token in
                 Button { tradeTarget = token } label: {
                     TokenListingRow(token: token)
@@ -163,6 +171,11 @@ private struct TokenListingRow: View {
                             TagChip(text: token.district.displayName, style: .neutral)
                         }
                         Text(token.businessName).font(.lbiHeadline).inkStyle()
+                        HStack(spacing: 4) {
+                            Image(systemName: "cube.fill").font(.system(size: 8))
+                            Text(token.contractAddress).font(.lbiLabel)
+                        }
+                        .foregroundStyle(Theme.Palette.inkSecondary.opacity(0.7))
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
@@ -263,6 +276,11 @@ private struct TokenTradeSheet: View {
                         Text(token.symbol).font(.lbiMonoSmall).inkSecondaryStyle()
                         Text(token.businessName).font(.lbiTitle).inkStyle()
                         Text("\(Money.hkd(token.lastPrice)) / token").font(.lbiBody).foregroundStyle(Theme.Palette.red)
+                        HStack(spacing: 4) {
+                            Image(systemName: "cube.fill").font(.system(size: 8))
+                            Text("ERC-20 · \(token.contractAddress)").font(.lbiLabel)
+                        }
+                        .foregroundStyle(Theme.Palette.inkSecondary.opacity(0.7))
                     }
 
                     Picker("Side", selection: $side) {
@@ -289,7 +307,7 @@ private struct TokenTradeSheet: View {
                     }
 
                     if showStubNotice {
-                        Text("Concept preview: no order was placed. Tokenized trading is not yet connected to a wallet or chain.")
+                        Text("Concept preview: no order was broadcast. On-chain settlement via the Web3 smart contract is not yet connected.")
                             .font(.lbiCaption)
                             .foregroundStyle(Theme.Palette.red)
                             .fixedSize(horizontal: false, vertical: true)
