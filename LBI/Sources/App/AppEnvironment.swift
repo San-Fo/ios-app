@@ -67,7 +67,12 @@ final class AppEnvironment {
             let userId: () -> String? = { box.value }
             authService = LiveAuthService(client: client, tokenStore: tokenStore)
             let imageUploader = LiveImageUploader(client: client)
-            businessRepository = LiveBusinessRepository(client: client, imageUploader: imageUploader)
+            // Live discovery reads fall back to sample data only when the live
+            // call errors (see FallbackBusinessRepository). Writes stay live.
+            businessRepository = FallbackBusinessRepository(
+                live: LiveBusinessRepository(client: client, imageUploader: imageUploader),
+                sample: MockBusinessRepository()
+            )
             profileRepository = LiveProfileRepository(client: client)
             takeoverRepository = LiveTakeoverRepository(client: client, currentUserId: userId)
             listingRepository = LiveListingRepository(client: client, imageUploader: imageUploader)

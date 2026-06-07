@@ -76,9 +76,10 @@ final class LiveBusinessRepository: BusinessRepository, @unchecked Sendable {
 // MARK: - Mock
 
 /// ⚠️ MOCK — in-memory business data (see `SampleData`). No backend.
-/// Active only when `APIConfiguration.useMockData == true`.
+/// Used as the active repo in mock mode, and as the sample-data source for
+/// `FallbackBusinessRepository` when live discovery reads fail.
 final class MockBusinessRepository: BusinessRepository, @unchecked Sendable {
-    init() { MockMarker.hit(.mock, "MockBusinessRepository", "discover/search/detail use SampleData") }
+    init() {}
 
     func recommended(for profile: UserProfile?) async throws -> [Business] {
         MockMarker.hit(.mock, "MockBusinessRepository.recommended")

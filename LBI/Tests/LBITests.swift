@@ -557,8 +557,46 @@ struct LBITests {
         MockMarker.reset()
         let repo = MockBusinessRepository()
         _ = try await repo.list(query: BusinessQuery())
-        #expect(MockMarker.firedSites.contains("MockBusinessRepository"))
         #expect(MockMarker.firedSites.contains("MockBusinessRepository.list"))
+    }
+
+    // MARK: Fallback discovery
+
+    @Test func fallbackUsesLiveWhenLiveSucceeds() async throws {
+        let liveBusiness = try #require(SampleData.summaries.first)
+        let live = StubBusinessRepository()
+        live.listResult = .success([liveBusiness])
+        let repo = FallbackBusinessRepository(live: live, sample: MockBusinessRepository())
+        let result = try await repo.list(query: BusinessQuery())
+        #expect(result.map(\.id) == [liveBusiness.id])
+    }
+
+    @Test func fallbackReturnsEmptyLiveResultWithoutFallback() async throws {
+        // A successful-but-empty live response is a real result, not a trigger.
+        let live = StubBusinessRepository()
+        live.listResult = .success([])
+        let repo = FallbackBusinessRepository(live: live, sample: MockBusinessRepository())
+        let result = try await repo.list(query: BusinessQuery())
+        #expect(result.isEmpty)
+    }
+
+    @Test func fallbackUsesSampleWhenLiveThrows() async throws {
+        let live = StubBusinessRepository()
+        live.listResult = .failure(APIError.transport("offline"))
+        let repo = FallbackBusinessRepository(live: live, sample: MockBusinessRepository())
+        let result = try await repo.list(query: BusinessQuery())
+        // Sample data is non-empty, so a fallback occurred.
+        #expect(!result.isEmpty)
+    }
+
+    @Test func fallbackDoesNotMaskWriteErrors() async throws {
+        // Writes must surface real errors — never silently fall back.
+        let live = StubBusinessRepository()
+        live.updateError = APIError.server(status: 500, message: "boom")
+        let repo = FallbackBusinessRepository(live: live, sample: MockBusinessRepository())
+        await #expect(throws: APIError.self) {
+            _ = try await repo.updateBusiness(id: "x", description: "y")
+        }
     }
 
     @Test func derivedEditorialFiresDerivedMarker() {
@@ -663,4 +701,38 @@ struct LBITests {
         let labels = VerificationKind.kyb.requiredDocuments.map(\.label)
         #expect(labels.contains { $0.localizedCaseInsensitiveContains("financial statements") && $0.contains("4") })
     }
+}
+
+// MARK: - Test doubles
+
+/// A configurable `BusinessRepository` stub for exercising the fallback
+/// decorator: each read can be set to a success value or a thrown error.
+private final class StubBusinessRepository: BusinessRepository, @unchecked Sendable {
+    var listResult: Result<[Business], Error> = .success([])
+    var updateError: Error?
+
+    func recommended(for profile: UserProfile?) async throws -> [Business] {
+        try listResult.get()
+    }
+
+    func list(query: BusinessQuery) async throws -> [Business] {
+        try listResult.get()
+    }
+
+    func detail(id: String) async throws -> BusinessDetail {
+        throw APIError.notFound
+    }
+
+    func myBusinesses() async throws -> [Business] { [] }
+
+    func updateBusiness(id: String, description: String) async throws -> BusinessDetail {
+        if let updateError { throw updateError }
+        throw APIError.notFound
+    }
+
+    func addMemory(businessId: String, author: String, text: String) async throws -> CommunityMemory {
+        CommunityMemory(id: "m", author: author, text: text)
+    }
+
+    func uploadPhoto(_ jpeg: Data) async throws -> String { "stub://photo" }
 }
