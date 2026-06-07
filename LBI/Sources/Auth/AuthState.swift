@@ -102,11 +102,27 @@ final class AuthState {
         errorMessage = nil
         defer { isWorking = false }
         do {
-            let user = try await service.signInDev(subject: nil, investorStatus: nil, name: "Guest")
+            // Use a stable, per-install subject so each device gets its own
+            // isolated guest account (and reuses it across launches) rather than
+            // everyone sharing the backend's default dev user.
+            let subject = AuthState.guestSubject
+            let user = try await service.signInDev(subject: subject, investorStatus: nil, name: "Guest")
             phase = .signedIn(user)
         } catch {
             // No backend session available — continue as a local-only guest.
             phase = .signedIn(AuthenticatedUser(id: "guest-user", displayName: "Guest", email: nil))
         }
+    }
+
+    /// A stable guest subject unique to this install, persisted in
+    /// `UserDefaults` so the same guest account is reused across app launches.
+    private static var guestSubject: String {
+        let key = "lbi.guestSubject"
+        if let existing = UserDefaults.standard.string(forKey: key) {
+            return existing
+        }
+        let new = "guest-\(UUID().uuidString.prefix(12))"
+        UserDefaults.standard.set(new, forKey: key)
+        return new
     }
 }
