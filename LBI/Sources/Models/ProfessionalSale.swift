@@ -179,6 +179,18 @@ struct SaleFinancials: Equatable {
     var inventoryValue: Decimal?
     /// Free-form notes (customer base, supplier contracts, etc.).
     var notes: String
+
+    /// Placeholder used when the backend has redacted confidential financials
+    /// for the current viewer (non-owner, non-institutional, pre-fallback).
+    static let redacted = SaleFinancials(
+        annualRevenue: 0,
+        annualProfit: 0,
+        monthlyRent: nil,
+        leaseYearsRemaining: nil,
+        staffCount: 0,
+        inventoryValue: nil,
+        notes: ""
+    )
 }
 
 /// A confidential, professional-first sale of a whole business.

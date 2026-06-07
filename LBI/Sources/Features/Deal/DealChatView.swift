@@ -166,10 +166,10 @@ struct DealChatView: View {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(4))
                 if Task.isCancelled { return }
-                let lastId = conversation.messages.last?.id
+                let lastSentAt = conversation.messages.last?.sentAt
                 if let newOnes = try? await environment.dealChatRepository.newMessages(
                     conversationId: conversationId,
-                    afterMessageId: lastId
+                    after: lastSentAt
                 ), !newOnes.isEmpty {
                     await MainActor.run {
                         let existing = Set(conversation.messages.map(\.id))

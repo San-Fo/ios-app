@@ -48,11 +48,11 @@ struct GroupChannelView: View {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(4))
                 if Task.isCancelled { return }
-                let lastId = channel.messages.last?.id
+                let lastSentAt = channel.messages.last?.sentAt
                 if let newOnes = try? await environment.takeoverRepository.newMessages(
                     groupId: groupId,
                     channelId: channel.id,
-                    afterMessageId: lastId
+                    after: lastSentAt
                 ), !newOnes.isEmpty {
                     await MainActor.run {
                         let existing = Set(channel.messages.map(\.id))

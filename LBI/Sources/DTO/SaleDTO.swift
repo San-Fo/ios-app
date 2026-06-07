@@ -1,74 +1,58 @@
 import Foundation
 
-/// Wire model for a professional sale. TODO(API): align with the backend.
-struct ProfessionalSaleDTO: Decodable {
-    let id: String
-    let businessId: String
-    let businessName: String
+/// Wire model for the `sale` object folded into a `Business` (backend
+/// `BusinessSale`). Confidential `financials` and `bids` may be redacted
+/// (`null` / `[]`) by the server depending on the viewer.
+struct BusinessSaleDTO: Decodable {
     let stage: String
     let askingPrice: Decimal
+    let financials: SaleFinancialsDTO?
     let aiEvaluation: SaleEvaluationDTO?
-    let commercialBiddingEndsAt: Date?
-    let financials: SaleFinancialsDTO
     let includes: [String]?
     let ownerWillingToStay: Bool?
     let handoverMonths: Int?
-    let retailFallbackOffer: RetailFallbackOfferDTO?
+    let commercialBiddingEndsAt: BSONDate?
+    let retailFallback: RetailFallbackDTO?
     let bids: [SaleBidDTO]?
-    let groupOffers: [GroupBuyOfferDTO]?
 
-    func toDomain() -> ProfessionalSale {
+    /// Maps to the app's `ProfessionalSale`. `businessId`/`businessName` come
+    /// from the enclosing business (the backend sale has no id of its own, so
+    /// we use the business id as the sale identifier).
+    func toDomain(businessId: String, businessName: String) -> ProfessionalSale {
         ProfessionalSale(
-            id: id,
+            id: businessId,
             businessId: businessId,
             businessName: businessName,
             stage: SaleStage(rawValue: stage) ?? .aiReview,
             askingPrice: askingPrice,
             aiEvaluation: aiEvaluation?.toDomain(),
-            commercialBiddingEndsAt: commercialBiddingEndsAt,
-            financials: financials.toDomain(),
+            commercialBiddingEndsAt: commercialBiddingEndsAt?.date,
+            financials: financials?.toDomain() ?? .redacted,
             includes: includes ?? [],
             ownerWillingToStay: ownerWillingToStay ?? false,
             handoverMonths: handoverMonths,
-            retailFallbackOffer: retailFallbackOffer?.toDomain(),
+            retailFallbackOffer: retailFallback?.toDomain(),
             bids: (bids ?? []).map { $0.toDomain() },
-            groupOffers: (groupOffers ?? []).map { $0.toDomain() }
+            groupOffers: Self.groupOffers(from: bids ?? [])
         )
     }
-}
 
-/// Result of accepting any offer: the updated sale plus the deal conversation
-/// the backend opened between the owner and the accepted party.
-struct AcceptOfferResultDTO: Decodable {
-    let sale: ProfessionalSaleDTO
-    let conversation: DealConversationDTO
-
-    func toDomain(currentUserId: String?) -> (sale: ProfessionalSale, conversation: DealConversation) {
-        (sale.toDomain(), conversation.toDomain(currentUserId: currentUserId))
-    }
-}
-
-struct GroupBuyOfferDTO: Decodable {
-    let id: String
-    let groupId: String
-    let groupName: String
-    let memberCount: Int
-    let amount: Decimal
-    let message: String?
-    let date: Date
-    let status: String
-
-    func toDomain() -> GroupBuyOffer {
-        GroupBuyOffer(
-            id: id,
-            groupId: groupId,
-            groupName: groupName,
-            memberCount: memberCount,
-            amount: amount,
-            message: message,
-            date: date,
-            status: BidStatus(rawValue: status) ?? .submitted
-        )
+    /// Bids tagged with a `bidderGroupId` are surfaced as group-buy offers so
+    /// the owner UI can show them distinctly.
+    private static func groupOffers(from bids: [SaleBidDTO]) -> [GroupBuyOffer] {
+        bids.compactMap { bid in
+            guard let groupId = bid.bidderGroupId else { return nil }
+            return GroupBuyOffer(
+                id: bid.id,
+                groupId: groupId,
+                groupName: bid.bidderName ?? "Takeover group",
+                memberCount: 0,
+                amount: bid.amount,
+                message: bid.message,
+                date: bid.createdAt?.date ?? Date(),
+                status: BidStatus(rawValue: bid.status) ?? .submitted
+            )
+        }
     }
 }
 
@@ -78,23 +62,36 @@ struct SaleEvaluationDTO: Decodable {
     let strengths: [String]?
     let risks: [String]?
     let summary: String?
-    let recommendedAction: String?
-    let confidence: Double?
 
     func toDomain() -> SaleEvaluation {
-        SaleEvaluation(
+        let mappedVerdict = EvaluationVerdict(rawValue: verdict) ?? .needsManualReview
+        return SaleEvaluation(
             score: score,
-            verdict: EvaluationVerdict(rawValue: verdict) ?? .needsManualReview,
+            verdict: mappedVerdict,
             strengths: strengths ?? [],
             risks: risks ?? [],
             summary: summary ?? "",
-            recommendedAction: recommendedAction ?? "",
-            confidence: confidence ?? 0.8
+            // recommendedAction/confidence are not provided by the backend;
+            // derive a sensible action from the verdict, leave confidence default.
+            recommendedAction: Self.recommendedAction(for: mappedVerdict),
+            confidence: 0.8
         )
+    }
+
+    private static func recommendedAction(for verdict: EvaluationVerdict) -> String {
+        switch verdict {
+        case .recommendedForCommercialBidding:
+            return "Move to bid — strong commercial candidate."
+        case .needsManualReview:
+            return "Review the financials and risks before bidding."
+        case .retailOnly:
+            return "Better suited to a retail or community buyer."
+        }
     }
 }
 
-struct RetailFallbackOfferDTO: Decodable {
+/// Backend `retailFallback` (set once the sale reaches `openToRetail`).
+struct RetailFallbackDTO: Decodable {
     let askingPrice: Decimal
     let allowOutrightPurchase: Bool?
     let allowGroupTakeover: Bool?
@@ -103,8 +100,8 @@ struct RetailFallbackOfferDTO: Decodable {
     func toDomain() -> RetailFallbackOffer {
         RetailFallbackOffer(
             askingPrice: askingPrice,
-            allowOutrightPurchase: allowOutrightPurchase ?? true,
-            allowGroupTakeover: allowGroupTakeover ?? true,
+            allowOutrightPurchase: allowOutrightPurchase ?? false,
+            allowGroupTakeover: allowGroupTakeover ?? false,
             ownerNote: ownerNote ?? ""
         )
     }
@@ -132,23 +129,26 @@ struct SaleFinancialsDTO: Decodable {
     }
 }
 
+/// Backend `SaleBid`. `bidderGroupId` is set when the bid was placed on behalf
+/// of a takeover group (collective offer).
 struct SaleBidDTO: Decodable {
     let id: String
-    let bidderName: String
-    let bidderCredential: String?
+    let bidderUserId: String?
+    let bidderName: String?
+    let bidderGroupId: String?
     let amount: Decimal
     let message: String?
-    let date: Date
     let status: String
+    let createdAt: BSONDate?
 
     func toDomain() -> SaleBid {
         SaleBid(
             id: id,
-            bidderName: bidderName,
-            bidderCredential: bidderCredential,
+            bidderName: bidderName ?? "Investor",
+            bidderCredential: nil,
             amount: amount,
             message: message,
-            date: date,
+            date: createdAt?.date ?? Date(),
             status: BidStatus(rawValue: status) ?? .submitted,
             isCurrentUser: false
         )

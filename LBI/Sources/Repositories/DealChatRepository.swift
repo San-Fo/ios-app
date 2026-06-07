@@ -1,17 +1,19 @@
 import Foundation
 
-/// Manages private, server-backed deal conversations between an owner and the
-/// party whose offer they accepted.
+/// Manages server-backed chat conversations (deal + group).
+///
+/// Polling uses a timestamp cursor (`after:`) because the backend's
+/// `/conversations/{id}/messages` takes a `after=<unixMillis>` parameter.
 protocol DealChatRepository: Sendable {
     /// All conversations the current user is part of.
     func conversations() async throws -> [DealConversation]
     /// Fetch one conversation (with its messages).
     func conversation(id: String) async throws -> DealConversation?
-    /// Fetch messages newer than `afterMessageId` (used for polling).
-    func newMessages(conversationId: String, afterMessageId: String?) async throws -> [DealMessage]
+    /// Fetch messages sent strictly after `date` (nil = all). Used for polling.
+    func newMessages(conversationId: String, after date: Date?) async throws -> [DealMessage]
     /// Send a message into a conversation.
     func sendMessage(conversationId: String, text: String) async throws -> DealMessage
-    /// Update the deal status.
+    /// Update the deal status (client-side only; the backend has no status).
     func updateStatus(conversationId: String, status: DealStatus) async throws -> DealConversation
     /// Register a conversation locally (mock convenience after accepting offers).
     func register(_ conversation: DealConversation)
@@ -29,28 +31,51 @@ final class LiveDealChatRepository: DealChatRepository, @unchecked Sendable {
     }
 
     func conversations() async throws -> [DealConversation] {
-        try await client.send(DealChatEndpoints.conversations())
-            .map { $0.toDomain(currentUserId: currentUserId()) }
+        let dtos = try await client.send(DealChatEndpoints.conversations())
+        // The list view only needs lightweight rows; messages are loaded when a
+        // conversation is opened.
+        return dtos.map { dto in
+            dto.toDomain(
+                businessName: "",
+                dealKind: dto.kind == "group" ? .groupTakeover : .commercialBid,
+                agreedAmount: 0,
+                counterpartyName: "Counterparty",
+                currentUserId: currentUserId(),
+                messages: []
+            )
+        }
     }
 
     func conversation(id: String) async throws -> DealConversation? {
-        try await client.send(DealChatEndpoints.conversation(id: id))
-            .toDomain(currentUserId: currentUserId())
+        let dto = try await client.send(DealChatEndpoints.conversation(id: id))
+        let messages = try await client.send(DealChatEndpoints.messages(conversationId: id, afterMillis: nil))
+            .map { $0.toDomain(currentUserId: currentUserId()) }
+        return dto.toDomain(
+            businessName: "",
+            dealKind: dto.kind == "group" ? .groupTakeover : .commercialBid,
+            agreedAmount: 0,
+            counterpartyName: "Counterparty",
+            currentUserId: currentUserId(),
+            messages: messages
+        )
     }
 
-    func newMessages(conversationId: String, afterMessageId: String?) async throws -> [DealMessage] {
-        try await client.send(DealChatEndpoints.messages(conversationId: conversationId, afterMessageId: afterMessageId))
+    func newMessages(conversationId: String, after date: Date?) async throws -> [DealMessage] {
+        let cursor = date.map { Int64(($0.timeIntervalSince1970 * 1000).rounded()) }
+        return try await client.send(DealChatEndpoints.messages(conversationId: conversationId, afterMillis: cursor))
             .map { $0.toDomain(currentUserId: currentUserId()) }
     }
 
     func sendMessage(conversationId: String, text: String) async throws -> DealMessage {
-        try await client.send(try DealChatEndpoints.sendMessage(conversationId: conversationId, text: text))
+        try await client.send(try DealChatEndpoints.sendMessage(conversationId: conversationId, body: text))
             .toDomain(currentUserId: currentUserId())
     }
 
     func updateStatus(conversationId: String, status: DealStatus) async throws -> DealConversation {
-        try await client.send(try DealChatEndpoints.updateStatus(conversationId: conversationId, status: status.rawValue))
-            .toDomain(currentUserId: currentUserId())
+        // The backend has no deal-status concept; re-fetch the conversation.
+        // TODO(API): add a status endpoint if deal lifecycle state is needed.
+        guard let convo = try await conversation(id: conversationId) else { throw APIError.notFound }
+        return convo
     }
 
     func register(_ conversation: DealConversation) {
@@ -74,12 +99,11 @@ final class MockDealChatRepository: DealChatRepository, @unchecked Sendable {
         mutex.withLock { conversations[id] }
     }
 
-    func newMessages(conversationId: String, afterMessageId: String?) async throws -> [DealMessage] {
+    func newMessages(conversationId: String, after date: Date?) async throws -> [DealMessage] {
         mutex.withLock {
             guard let messages = conversations[conversationId]?.messages else { return [] }
-            guard let afterMessageId else { return messages }
-            guard let index = messages.firstIndex(where: { $0.id == afterMessageId }) else { return [] }
-            return Array(messages.suffix(from: messages.index(after: index)))
+            guard let date else { return messages }
+            return messages.filter { $0.sentAt > date }
         }
     }
 

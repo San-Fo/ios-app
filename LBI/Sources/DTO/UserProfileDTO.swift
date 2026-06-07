@@ -138,7 +138,8 @@ extension BusinessCategory {
 }
 
 extension UserIntent {
-    /// Map the backend's user financial intent to the app's `UserIntent`.
+    /// Map the backend's user financial intent (sent verbatim) to `UserIntent`.
+    /// Backend values are `purchase`, `donation`, `revenueShareLoan`.
     static func fromServerIntent(_ raw: String) -> UserIntent? {
         switch raw {
         case "purchase": return .buyBusiness
@@ -148,8 +149,9 @@ extension UserIntent {
         }
     }
 
-    /// Map the app's `UserIntent` to the backend's financial intent value.
-    /// `.joinTakeover` has no backend equivalent and is omitted by the caller.
+    /// Map `UserIntent` to the backend's financial-intent raw value (verbatim).
+    /// `.joinTakeover` is not a financial intent on the backend — it's handled
+    /// via the takeover-group endpoints — so it is omitted from the payload.
     var serverIntent: String? {
         switch self {
         case .buyBusiness: return "purchase"

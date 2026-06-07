@@ -1,194 +1,213 @@
 import Foundation
 
-/// Wire model for a business summary.
+/// Wire model for the backend `Business`. The backend returns one shape for
+/// list, search, detail and saved; the `sale` is folded in and confidential
+/// fields are redacted server-side per viewer.
 ///
-/// TODO(API): replace these fields with the real backend schema. Keep the
-/// `toDomain()` mapping as the single translation point so the UI never depends
-/// on the wire format.
+/// The backend has no authored editorial content (story headline, founder
+/// story, memories, reward tiers). Per the backend team, the client derives
+/// these: headline/tagline ← `description`, heritage badge ← `foundingYear`,
+/// founder name/story ← embedded `owner`. `galleryImageUrls` is a real field.
 struct BusinessDTO: Decodable {
     let id: String
+    let ownerUserId: String
     let name: String
-    let category: String
-    let district: String
-    let storyHeadline: String
-    let heroImageURL: String?
-    let status: String
-    let fundingGoal: Decimal
-    let fundingRaised: Decimal
-    let fundingOptions: [String]
-    let yearEstablished: Int?
-    let deadline: Date?
-    let savedCount: Int?
-    let viewCount: Int?
+    let description: String
+    let foundingYear: Int?
+    let categories: [String]?
+    let district: String?
+    let location: BusinessLocationDTO?
+    let financialIntent: BusinessFinancialIntentDTO?
+    let verificationStatus: String?
+    let sale: BusinessSaleDTO?
+    let galleryImageUrls: [String]?
+    let owner: OwnerSummaryDTO?
+    let listingStatistics: ListingStatisticsDTO?
+    let createdAt: BSONDate?
 
-    func toDomain() -> Business {
-        Business(
+    /// First category mapped to the app's richer category set (fallback shop).
+    private var primaryCategory: BusinessCategory {
+        categories?.first.flatMap(BusinessCategory.fromServer) ?? .traditionalShop
+    }
+
+    private var mappedDistrict: District {
+        district.flatMap(District.init(rawValue:)) ?? .central
+    }
+
+    /// The funding/ownership routes derived from the business financial intent
+    /// and sale stage (so the UI's funding-kind chips still work).
+    private var fundingKinds: Set<FundingKind> {
+        var kinds: Set<FundingKind> = []
+        switch financialIntent?.kind {
+        case .sale: kinds.insert(.fullAcquisition)
+        case .revenueShareLoan: kinds.insert(.revenueShare)
+        case .donation, .none: break
+        }
+        if let fallback = sale?.retailFallback, fallback.allowGroupTakeover == true {
+            kinds.insert(.takeoverGroup)
+        }
+        return kinds
+    }
+
+    /// Maps the backend sale `verificationStatus` + stage onto the app's
+    /// listing status used for badges/progress.
+    private var mappedStatus: BusinessStatus {
+        if let stage = sale?.stage {
+            switch stage {
+            case "openToRetail": return .seekingBuyer
+            case "accepted": return .underOffer
+            case "sold": return .preserved
+            case "aiReview", "commercialBidding", "ownerDecision": return .seekingBuyer
+            default: break
+            }
+        }
+        switch financialIntent?.kind {
+        case .revenueShareLoan: return .raising
+        default: return .raising
+        }
+    }
+
+    // MARK: Domain mapping
+
+    /// The list/card summary model.
+    func toSummary() -> Business {
+        let target = financialIntent?.targetAmount ?? sale?.askingPrice ?? 0
+        return Business(
             id: id,
             name: name,
-            category: BusinessCategory(rawValue: category) ?? .traditionalShop,
-            district: District(rawValue: district) ?? .central,
-            storyHeadline: storyHeadline,
-            heroImageURL: heroImageURL.flatMap(URL.init(string:)),
-            status: BusinessStatus(rawValue: status) ?? .raising,
-            fundingGoal: fundingGoal,
-            fundingRaised: fundingRaised,
-            fundingOptions: Set(fundingOptions.compactMap(FundingKind.init(rawValue:))),
-            yearEstablished: yearEstablished,
-            deadline: deadline,
-            savedCount: savedCount ?? 0,
-            viewCount: viewCount ?? 0
+            category: primaryCategory,
+            district: mappedDistrict,
+            storyHeadline: description,
+            heroImageURL: galleryImageUrls?.first.flatMap(URL.init(string:)),
+            status: mappedStatus,
+            fundingGoal: target,
+            fundingRaised: 0,
+            fundingOptions: fundingKinds,
+            yearEstablished: foundingYear,
+            deadline: nil,
+            savedCount: listingStatistics?.likeCount ?? 0,
+            viewCount: listingStatistics?.viewCount ?? 0
         )
     }
-}
 
-/// Wire model for a community memory.
-struct CommunityMemoryDTO: Decodable {
-    let id: String
-    let author: String
-    let text: String
-    let yearsAgo: Int?
-    let authorInitials: String?
-    let relationship: String?
-
-    func toDomain() -> CommunityMemory {
-        CommunityMemory(id: id, author: author, text: text, yearsAgo: yearsAgo, authorInitials: authorInitials, relationship: relationship)
-    }
-}
-
-/// Wire model for a business snapshot.
-struct BusinessSnapshotDTO: Decodable {
-    let foundedYear: Int
-    let employees: Int
-    let monthlyRevenue: Decimal?
-    let address: String
-    let highlights: [String]
-
-    func toDomain() -> BusinessSnapshot {
-        BusinessSnapshot(foundedYear: foundedYear, employees: employees, monthlyRevenue: monthlyRevenue, address: address, highlights: highlights)
-    }
-}
-
-/// Wire model for revenue-share terms.
-struct RevenueShareTermsDTO: Decodable {
-    let fundingTarget: Decimal
-    let revenueSharePercent: Double
-    let targetMultiple: Double
-    let estimatedMonths: Int
-    let useOfFunds: String
-    let useOfFundsBreakdown: [UseOfFundsItemDTO]?
-    let minimumInvestment: Decimal?
-    let maximumInvestment: Decimal?
-
-    func toDomain() -> RevenueShareTerms {
-        RevenueShareTerms(
-            fundingTarget: fundingTarget,
-            revenueSharePercent: revenueSharePercent,
-            targetMultiple: targetMultiple,
-            estimatedMonths: estimatedMonths,
-            useOfFunds: useOfFunds,
-            useOfFundsBreakdown: (useOfFundsBreakdown ?? []).map { $0.toDomain() },
-            minimumInvestment: minimumInvestment,
-            maximumInvestment: maximumInvestment
-        )
-    }
-}
-
-struct UseOfFundsItemDTO: Decodable {
-    let label: String
-    let percentage: Double
-    func toDomain() -> UseOfFundsItem { UseOfFundsItem(label: label, percentage: percentage) }
-}
-
-/// Wire model for partial ownership.
-struct PartialOwnershipDTO: Decodable {
-    let equityOfferedPercent: Double
-    let valuation: Decimal
-    let minimumInvestment: Decimal
-    let existingInvestors: Int?
-
-    func toDomain() -> PartialOwnershipOption {
-        PartialOwnershipOption(equityOfferedPercent: equityOfferedPercent, valuation: valuation, minimumInvestment: minimumInvestment, existingInvestors: existingInvestors ?? 0)
-    }
-}
-
-/// Wire model for full acquisition.
-struct FullAcquisitionDTO: Decodable {
-    let askingPrice: Decimal
-    let openToGroupOffer: Bool
-    let includes: [String]
-    let includesProperty: Bool?
-    let leaseYearsRemaining: Int?
-    let monthlyRevenue: Decimal?
-    let staffCount: Int?
-    let ownerWillingToStay: Bool?
-    let handoverMonths: Int?
-
-    func toDomain() -> FullAcquisitionOption {
-        FullAcquisitionOption(
-            askingPrice: askingPrice,
-            openToGroupOffer: openToGroupOffer,
-            includes: includes,
-            includesProperty: includesProperty ?? false,
-            leaseYearsRemaining: leaseYearsRemaining,
-            monthlyRevenue: monthlyRevenue,
-            staffCount: staffCount,
-            ownerWillingToStay: ownerWillingToStay ?? false,
-            handoverMonths: handoverMonths
-        )
-    }
-}
-
-/// Wire model for full business detail.
-/// TODO(API): align with the backend; this maps every section to the domain.
-struct BusinessDetailDTO: Decodable {
-    let id: String
-    let summary: BusinessDTO
-    let tagline: String?
-    let founderName: String
-    let founderStory: String
-    let whyItMatters: String
-    let communityMemories: [CommunityMemoryDTO]?
-    let snapshot: BusinessSnapshotDTO?
-    let useOfFunds: String
-    let revenueShareTerms: RevenueShareTermsDTO?
-    let partialOwnership: PartialOwnershipDTO?
-    let fullAcquisition: FullAcquisitionDTO?
-    let hasTakeoverGroup: Bool
-    let galleryImageURLs: [String]?
-    let shareRewards: [ShareRewardDTO]?
-    let professionalSale: ProfessionalSaleDTO?
-
-    func toDomain() -> BusinessDetail {
+    /// The full detail model. Editorial content is derived (see type doc).
+    func toDetail() -> BusinessDetail {
         BusinessDetail(
             id: id,
-            summary: summary.toDomain(),
-            tagline: tagline ?? summary.storyHeadline,
-            founderName: founderName,
-            founderStory: founderStory,
-            whyItMatters: whyItMatters,
-            communityMemories: (communityMemories ?? []).map { $0.toDomain() },
-            snapshot: snapshot?.toDomain() ?? BusinessSnapshot(foundedYear: summary.yearEstablished ?? 0, employees: 0, monthlyRevenue: nil, address: "", highlights: []),
-            useOfFunds: useOfFunds,
-            revenueShareTerms: revenueShareTerms?.toDomain(),
-            partialOwnership: partialOwnership?.toDomain(),
-            fullAcquisition: fullAcquisition?.toDomain(),
-            hasTakeoverGroup: hasTakeoverGroup,
-            galleryImageURLs: (galleryImageURLs ?? []).compactMap(URL.init(string:)),
-            shareRewards: (shareRewards ?? []).map { $0.toDomain() },
-            professionalSale: professionalSale?.toDomain()
+            summary: toSummary(),
+            tagline: description,
+            founderName: owner?.name ?? "",
+            founderStory: owner?.biography ?? description,
+            whyItMatters: description,
+            communityMemories: [],
+            snapshot: BusinessSnapshot(
+                foundedYear: foundingYear ?? 0,
+                employees: sale?.financials?.staffCount ?? 0,
+                monthlyRevenue: nil,
+                address: location?.address ?? "",
+                highlights: []
+            ),
+            useOfFunds: "",
+            revenueShareTerms: financialIntent?.revenueShareTerms,
+            partialOwnership: nil,
+            fullAcquisition: nil,
+            hasTakeoverGroup: sale?.retailFallback?.allowGroupTakeover ?? false,
+            galleryImageURLs: (galleryImageUrls ?? []).compactMap(URL.init(string:)),
+            shareRewards: [],
+            professionalSale: sale?.toDomain(businessId: id, businessName: name)
         )
     }
 }
 
-/// Wire model for an owner-set supporter reward tier.
-/// TODO(API): align with the backend schema.
-struct ShareRewardDTO: Decodable {
+/// Embedded, redacted owner summary computed by the backend at read time.
+struct OwnerSummaryDTO: Decodable {
     let id: String
-    let cardsRequired: Int
-    let title: String
-    let detail: String?
+    let name: String?
+    let biography: String?
+    let profileImageUrl: String?
+}
 
-    func toDomain() -> ShareReward {
-        ShareReward(id: id, cardsRequired: cardsRequired, title: title, detail: detail)
+/// `listingStatistics` on a business.
+struct ListingStatisticsDTO: Decodable {
+    let viewCount: Int?
+    let likeCount: Int?
+}
+
+/// `location` on a business: human address + GeoJSON point.
+struct BusinessLocationDTO: Decodable {
+    let address: String?
+    let geo: GeoPointDTO?
+}
+
+/// Externally-tagged business financial intent:
+/// `{ "sale": { targetAmount } }`,
+/// `{ "donation": { tiers[] } }`,
+/// `{ "revenueShareLoan": { targetAmount, totalInterestPercentage, totalRevenueCutPercentage } }`.
+struct BusinessFinancialIntentDTO: Decodable {
+    enum Kind { case sale, donation, revenueShareLoan }
+
+    let kind: Kind
+    let targetAmount: Decimal?
+    let donationTiers: [DonationTierDTO]?
+    let totalInterestPercentage: Double?
+    let totalRevenueCutPercentage: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case sale, donation, revenueShareLoan
     }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let sale = try? c.decode(SalePayload.self, forKey: .sale) {
+            kind = .sale
+            targetAmount = sale.targetAmount
+            donationTiers = nil
+            totalInterestPercentage = nil
+            totalRevenueCutPercentage = nil
+        } else if let donation = try? c.decode(DonationPayload.self, forKey: .donation) {
+            kind = .donation
+            targetAmount = nil
+            donationTiers = donation.tiers
+            totalInterestPercentage = nil
+            totalRevenueCutPercentage = nil
+        } else if let loan = try? c.decode(LoanPayload.self, forKey: .revenueShareLoan) {
+            kind = .revenueShareLoan
+            targetAmount = loan.targetAmount
+            donationTiers = nil
+            totalInterestPercentage = loan.totalInterestPercentage
+            totalRevenueCutPercentage = loan.totalRevenueCutPercentage
+        } else {
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: decoder.codingPath, debugDescription: "Unknown financialIntent variant")
+            )
+        }
+    }
+
+    /// A revenue-share-loan intent projected onto the app's `RevenueShareTerms`.
+    var revenueShareTerms: RevenueShareTerms? {
+        guard kind == .revenueShareLoan, let target = targetAmount else { return nil }
+        return RevenueShareTerms(
+            fundingTarget: target,
+            revenueSharePercent: totalRevenueCutPercentage ?? 0,
+            targetMultiple: 1 + ((totalInterestPercentage ?? 0) / 100),
+            estimatedMonths: 0,
+            useOfFunds: "",
+            useOfFundsBreakdown: [],
+            minimumInvestment: nil,
+            maximumInvestment: nil
+        )
+    }
+
+    private struct SalePayload: Decodable { let targetAmount: Decimal? }
+    private struct DonationPayload: Decodable { let tiers: [DonationTierDTO]? }
+    private struct LoanPayload: Decodable {
+        let targetAmount: Decimal?
+        let totalInterestPercentage: Double?
+        let totalRevenueCutPercentage: Double?
+    }
+}
+
+struct DonationTierDTO: Decodable {
+    let name: String
+    let minAmount: Decimal
 }

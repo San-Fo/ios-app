@@ -1,58 +1,65 @@
 import Foundation
 
-/// Wire model sent when an owner submits a listing.
-/// TODO(API): align with the backend schema; add photo references for upload.
-struct ListingSubmissionDTO: Encodable {
-    let businessName: String
-    let category: String
-    let district: String
-    let foundedYear: Int?
-    let founderStory: String
-    let whyItMatters: String
-    let monthlyRevenue: Decimal?
-    let employees: Int?
-    let desiredOutcomes: [String]
-    let saleAskingPrice: Decimal?
-    let retailFallbackPrice: Decimal?
-    let allowRetailOutrightPurchase: Bool
-    let allowRetailGroupTakeover: Bool
-    let contactEmail: String
-
-    init(_ draft: ListingDraft) {
-        businessName = draft.businessName
-        category = draft.category.rawValue
-        district = draft.district.rawValue
-        foundedYear = Int(draft.foundedYear)
-        founderStory = draft.founderStory
-        whyItMatters = draft.whyItMatters
-        monthlyRevenue = Decimal(string: draft.monthlyRevenue)
-        employees = Int(draft.employees)
-        desiredOutcomes = draft.desiredOutcomes.map(\.rawValue)
-        saleAskingPrice = Decimal(string: draft.saleAskingPrice)
-        retailFallbackPrice = Decimal(string: draft.retailFallbackPrice)
-        allowRetailOutrightPurchase = draft.allowRetailOutrightPurchase
-        allowRetailGroupTakeover = draft.allowRetailGroupTakeover
-        contactEmail = draft.contactEmail
-    }
-}
-
-/// Wire model returned after recording an investment/support action.
-/// TODO(API): align with the backend schema.
-struct InvestmentDTO: Decodable {
+/// Wire model for a backend `Action` (a recorded financing action).
+///
+/// `kind` is externally tagged and serializes per variant:
+/// `"purchase"`, `{ "donation": { amount, tier } }`,
+/// `{ "revenueShareLoan": { amount } }`.
+struct ActionDTO: Decodable {
     let id: String
+    let userId: String
     let businessId: String
-    let kind: String
-    let amount: Decimal
-    let date: Date
+    let kind: ActionKind
+    let createdAt: BSONDate?
+
+    enum ActionKind: Decodable {
+        case purchase
+        case donation(amount: Decimal, tier: String?)
+        case revenueShareLoan(amount: Decimal)
+
+        private enum CodingKeys: String, CodingKey { case donation, revenueShareLoan }
+        private struct DonationPayload: Decodable { let amount: Decimal; let tier: String? }
+        private struct LoanPayload: Decodable { let amount: Decimal }
+
+        init(from decoder: Decoder) throws {
+            // Unit variant: a bare string "purchase".
+            if let single = try? decoder.singleValueContainer(), let raw = try? single.decode(String.self) {
+                if raw == "purchase" { self = .purchase; return }
+            }
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            if let d = try? c.decode(DonationPayload.self, forKey: .donation) {
+                self = .donation(amount: d.amount, tier: d.tier)
+            } else if let l = try? c.decode(LoanPayload.self, forKey: .revenueShareLoan) {
+                self = .revenueShareLoan(amount: l.amount)
+            } else {
+                throw DecodingError.dataCorrupted(
+                    .init(codingPath: decoder.codingPath, debugDescription: "Unknown action kind")
+                )
+            }
+        }
+    }
 
     func toDomain(businessName: String) -> InvestmentRecord {
-        InvestmentRecord(
+        let fundingKind: FundingKind
+        let amount: Decimal
+        switch kind {
+        case .purchase:
+            fundingKind = .fullAcquisition
+            amount = 0
+        case let .donation(donationAmount, _):
+            fundingKind = .fullAcquisition
+            amount = donationAmount
+        case let .revenueShareLoan(loanAmount):
+            fundingKind = .revenueShare
+            amount = loanAmount
+        }
+        return InvestmentRecord(
             id: id,
             businessId: businessId,
             businessName: businessName,
-            kind: FundingKind(rawValue: kind) ?? .revenueShare,
+            kind: fundingKind,
             amount: amount,
-            date: date
+            date: createdAt?.date ?? Date()
         )
     }
 }

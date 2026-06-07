@@ -1,49 +1,77 @@
 import Foundation
 
-/// Manages takeover groups, channels, messages and collective offers.
+/// Manages takeover groups, their chat, and collective offers.
+///
+/// Group chat rides on the shared conversation system: the `channelId` passed
+/// to the chat methods is the group's `conversationId`.
 protocol TakeoverRepository: Sendable {
     func group(forBusiness businessId: String) async throws -> TakeoverGroup?
     func join(groupId: String) async throws
     func sendMessage(groupId: String, channelId: String, text: String) async throws -> GroupMessage
-    /// Fetch channel messages newer than `afterMessageId` (used for polling).
-    func newMessages(groupId: String, channelId: String, afterMessageId: String?) async throws -> [GroupMessage]
+    /// Fetch channel messages sent after `date` (used for polling).
+    func newMessages(groupId: String, channelId: String, after date: Date?) async throws -> [GroupMessage]
     func submitCollectiveOffer(groupId: String, amount: Decimal) async throws
     func askFounder(groupId: String, question: String) async throws -> FounderQA
 }
 
-// MARK: - Live (placeholder)
+// MARK: - Live
 
 final class LiveTakeoverRepository: TakeoverRepository, @unchecked Sendable {
     private let client: APIClient
-    init(client: APIClient) { self.client = client }
+    private let currentUserId: () -> String?
+
+    init(client: APIClient, currentUserId: @escaping () -> String? = { nil }) {
+        self.client = client
+        self.currentUserId = currentUserId
+    }
 
     func group(forBusiness businessId: String) async throws -> TakeoverGroup? {
-        // TODO(API): map TakeoverGroupDTO → domain once the backend is ready.
-        try await client.send(TakeoverEndpoints.group(businessId: businessId)).toDomain()
+        // The backend returns a list of groups for a business; surface the first.
+        try await client.send(TakeoverEndpoints.groups(businessId: businessId))
+            .first?
+            .toDomain(businessName: "")
     }
 
     func join(groupId: String) async throws {
-        try await client.send(TakeoverEndpoints.join(groupId: groupId))
+        _ = try await client.send(try TakeoverEndpoints.join(groupId: groupId, pledgeAmount: nil))
     }
 
     func sendMessage(groupId: String, channelId: String, text: String) async throws -> GroupMessage {
-        // TODO(API): return mapped message from the backend response.
-        let dto = try await client.send(try TakeoverEndpoints.sendMessage(groupId: groupId, channelId: channelId, text: text))
-        return dto.toDomain()
+        // channelId is the group's conversationId.
+        let dto = try await client.send(try DealChatEndpoints.sendMessage(conversationId: channelId, body: text))
+        return GroupMessage(
+            id: dto.id,
+            authorName: "You",
+            text: dto.body,
+            sentAt: dto.createdAt?.date ?? Date(),
+            isCurrentUser: true
+        )
     }
 
-    func newMessages(groupId: String, channelId: String, afterMessageId: String?) async throws -> [GroupMessage] {
-        try await client.send(TakeoverEndpoints.messages(groupId: groupId, channelId: channelId, afterMessageId: afterMessageId))
-            .map { $0.toDomain() }
+    func newMessages(groupId: String, channelId: String, after date: Date?) async throws -> [GroupMessage] {
+        let cursor = date.map { Int64(($0.timeIntervalSince1970 * 1000).rounded()) }
+        let me = currentUserId()
+        return try await client.send(DealChatEndpoints.messages(conversationId: channelId, afterMillis: cursor))
+            .map { dto in
+                GroupMessage(
+                    id: dto.id,
+                    authorName: dto.senderUserId == me ? "You" : "Member",
+                    text: dto.body,
+                    sentAt: dto.createdAt?.date ?? Date(),
+                    isCurrentUser: dto.senderUserId == me
+                )
+            }
     }
 
     func submitCollectiveOffer(groupId: String, amount: Decimal) async throws {
-        try await client.send(try TakeoverEndpoints.submitOffer(groupId: groupId, amount: amount))
+        // The backend sums member pledges itself; `amount` is informational.
+        _ = try await client.send(TakeoverEndpoints.submitOffer(groupId: groupId))
     }
 
     func askFounder(groupId: String, question: String) async throws -> FounderQA {
-        let dto = try await client.send(try TakeoverEndpoints.askFounder(groupId: groupId, question: question))
-        return dto.toDomain()
+        // No backend founder-Q&A endpoint; return a local echo so the UI flows.
+        // TODO(API): add a founder Q&A endpoint if this feature is kept.
+        FounderQA(id: UUID().uuidString, question: question, answer: nil, askedBy: "You")
     }
 }
 
@@ -82,15 +110,14 @@ final class MockTakeoverRepository: TakeoverRepository, @unchecked Sendable {
         return message
     }
 
-    func newMessages(groupId: String, channelId: String, afterMessageId: String?) async throws -> [GroupMessage] {
+    func newMessages(groupId: String, channelId: String, after date: Date?) async throws -> [GroupMessage] {
         mutex.withLock {
             guard let key = groups.first(where: { $0.value.id == groupId })?.key,
                   let channel = groups[key]?.channels.first(where: { $0.id == channelId }) else {
                 return []
             }
-            guard let afterMessageId else { return channel.messages }
-            guard let index = channel.messages.firstIndex(where: { $0.id == afterMessageId }) else { return [] }
-            return Array(channel.messages.suffix(from: channel.messages.index(after: index)))
+            guard let date else { return channel.messages }
+            return channel.messages.filter { $0.sentAt > date }
         }
     }
 

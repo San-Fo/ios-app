@@ -1,49 +1,65 @@
 import Foundation
 
-/// API endpoints for takeover groups.
-/// TODO(API): confirm paths and payloads with the backend team.
+/// API endpoints for takeover groups. Group chat is the shared conversation
+/// system (see `DealChatEndpoints`), keyed by the group's `conversationId`.
 enum TakeoverEndpoints {
-    static func group(businessId: String) -> Endpoint<TakeoverGroupDTO> {
-        Endpoint(path: "businesses/\(businessId)/takeover-group", method: .get)
+    /// Groups for a business.
+    static func groups(businessId: String) -> Endpoint<[TakeoverGroupDTO]> {
+        Endpoint(path: "businesses/\(businessId)/takeover-groups", method: .get)
     }
 
-    static func join(groupId: String) -> Endpoint<EmptyResponse> {
-        Endpoint(path: "takeover-groups/\(groupId)/members", method: .post)
-    }
-
-    static func sendMessage(groupId: String, channelId: String, text: String) throws -> Endpoint<GroupMessageDTO> {
+    /// Create a group on a business.
+    static func create(businessId: String, name: String, pledgeAmount: Decimal?) throws -> Endpoint<TakeoverGroupDTO> {
         try .json(
-            path: "takeover-groups/\(groupId)/channels/\(channelId)/messages",
+            path: "businesses/\(businessId)/takeover-groups",
             method: .post,
-            body: ["text": text]
+            body: CreateBody(name: name, pledgeAmount: pledgeAmount)
         )
     }
 
-    static func messages(groupId: String, channelId: String, afterMessageId: String?) -> Endpoint<[GroupMessageDTO]> {
-        var query: [URLQueryItem] = []
-        if let afterMessageId {
-            query.append(URLQueryItem(name: "after", value: afterMessageId))
-        }
-        return Endpoint(
-            path: "takeover-groups/\(groupId)/channels/\(channelId)/messages",
-            method: .get,
-            query: query
-        )
+    /// A single group.
+    static func group(groupId: String) -> Endpoint<TakeoverGroupDTO> {
+        Endpoint(path: "takeover-groups/\(groupId)", method: .get)
     }
 
-    static func submitOffer(groupId: String, amount: Decimal) throws -> Endpoint<EmptyResponse> {
+    /// Join a group (optionally with a pledge).
+    static func join(groupId: String, pledgeAmount: Decimal?) throws -> Endpoint<TakeoverGroupDTO> {
         try .json(
-            path: "takeover-groups/\(groupId)/offers",
+            path: "takeover-groups/\(groupId)/join",
             method: .post,
-            body: ["amount": amount]
+            body: PledgeBody(pledgeAmount: pledgeAmount)
         )
     }
 
-    static func askFounder(groupId: String, question: String) throws -> Endpoint<FounderQADTO> {
+    /// Leave a group (owner leaving disbands it).
+    static func leave(groupId: String) -> Endpoint<EmptyResponse> {
+        Endpoint(path: "takeover-groups/\(groupId)/leave", method: .post)
+    }
+
+    /// Update the caller's pledge.
+    static func pledge(groupId: String, pledgeAmount: Decimal) throws -> Endpoint<TakeoverGroupDTO> {
         try .json(
-            path: "takeover-groups/\(groupId)/questions",
-            method: .post,
-            body: ["question": question]
+            path: "takeover-groups/\(groupId)/pledge",
+            method: .put,
+            body: PledgeRequiredBody(pledgeAmount: pledgeAmount)
         )
+    }
+
+    /// Group owner submits the collective offer (sums pledges into a sale bid).
+    static func submitOffer(groupId: String) -> Endpoint<TakeoverGroupDTO> {
+        Endpoint(path: "takeover-groups/\(groupId)/submit-offer", method: .post)
+    }
+
+    private struct CreateBody: Encodable {
+        let name: String
+        let pledgeAmount: Decimal?
+    }
+
+    private struct PledgeBody: Encodable {
+        let pledgeAmount: Decimal?
+    }
+
+    private struct PledgeRequiredBody: Encodable {
+        let pledgeAmount: Decimal
     }
 }

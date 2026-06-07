@@ -37,38 +37,77 @@ final class LiveSaleRepository: SaleRepository, @unchecked Sendable {
     }
 
     func sales() async throws -> [ProfessionalSale] {
-        try await client.send(SaleEndpoints.sales()).map { $0.toDomain() }
+        try await client.send(SaleEndpoints.sales()).compactMap(saleDomain)
     }
 
     func sale(forBusiness businessId: String) async throws -> ProfessionalSale? {
-        try await client.send(SaleEndpoints.sale(businessId: businessId)).toDomain()
+        saleDomain(try await client.send(SaleEndpoints.sale(businessId: businessId)))
     }
 
     func placeBid(saleId: String, amount: Decimal, message: String?) async throws -> SaleBid {
-        let dto = try await client.send(try SaleEndpoints.placeBid(saleId: saleId, amount: amount, message: message))
-        return dto.toDomain()
+        // `saleId` is the businessId (the sale is folded into the business).
+        let business = try await client.send(try SaleEndpoints.placeBid(businessId: saleId, amount: amount, message: message))
+        // Return the caller's just-placed bid (highest by recency on the sale).
+        guard let sale = saleDomain(business), let mine = sale.bids.last else { throw APIError.unknown }
+        return mine
     }
 
     func acceptBid(saleId: String, bidId: String) async throws -> AcceptedOffer {
-        let result = try await client.send(SaleEndpoints.acceptBid(saleId: saleId, bidId: bidId))
-            .toDomain(currentUserId: currentUserId())
-        return AcceptedOffer(sale: result.sale, conversation: result.conversation)
+        // Accepting returns the updated Business and creates a deal conversation
+        // server-side; we then locate that conversation to open the chat.
+        let business = try await client.send(SaleEndpoints.acceptBid(businessId: saleId, bidId: bidId))
+        guard let sale = saleDomain(business) else { throw APIError.unknown }
+        let conversation = try await dealConversation(forBusiness: saleId, sale: sale)
+        return AcceptedOffer(sale: sale, conversation: conversation)
     }
 
     func acceptGroupOffer(saleId: String, offerId: String) async throws -> AcceptedOffer {
-        let result = try await client.send(SaleEndpoints.acceptGroupOffer(saleId: saleId, offerId: offerId))
-            .toDomain(currentUserId: currentUserId())
-        return AcceptedOffer(sale: result.sale, conversation: result.conversation)
+        // A group offer is materialised as a normal bid (tagged bidderGroupId),
+        // so accepting it uses the same accept-bid endpoint.
+        try await acceptBid(saleId: saleId, bidId: offerId)
     }
 
     func acceptRetailPurchase(saleId: String, buyerName: String) async throws -> AcceptedOffer {
-        let result = try await client.send(SaleEndpoints.acceptRetailPurchase(saleId: saleId))
-            .toDomain(currentUserId: currentUserId())
-        return AcceptedOffer(sale: result.sale, conversation: result.conversation)
+        // The backend has no "accept retail purchase" endpoint; a retail buyer
+        // records a purchase Action instead, and there is no deal chat for it.
+        // TODO(API): add a retail-purchase accept + conversation if needed.
+        throw APIError.notFound
     }
 
     func declineCommercialBids(saleId: String, retailAskingPrice: Decimal, allowOutrightPurchase: Bool, allowGroupTakeover: Bool) async throws -> ProfessionalSale {
-        try await client.send(try SaleEndpoints.declineCommercialBids(saleId: saleId, retailAskingPrice: retailAskingPrice, allowOutrightPurchase: allowOutrightPurchase, allowGroupTakeover: allowGroupTakeover)).toDomain()
+        let business = try await client.send(try SaleEndpoints.declineCommercialBids(
+            businessId: saleId,
+            retailAskingPrice: retailAskingPrice,
+            allowOutrightPurchase: allowOutrightPurchase,
+            allowGroupTakeover: allowGroupTakeover,
+            ownerNote: nil
+        ))
+        guard let sale = saleDomain(business) else { throw APIError.unknown }
+        return sale
+    }
+
+    // MARK: Helpers
+
+    private func saleDomain(_ business: BusinessDTO) -> ProfessionalSale? {
+        business.sale?.toDomain(businessId: business.id, businessName: business.name)
+    }
+
+    /// Finds the deal conversation for a business after a bid is accepted.
+    private func dealConversation(forBusiness businessId: String, sale: ProfessionalSale) async throws -> DealConversation {
+        let convos = try await client.send(DealChatEndpoints.conversations())
+        guard let match = convos.first(where: { $0.kind == "deal" && $0.businessId == businessId }) else {
+            throw APIError.notFound
+        }
+        let messages = try await client.send(DealChatEndpoints.messages(conversationId: match.id, afterMillis: nil))
+            .map { $0.toDomain(currentUserId: currentUserId()) }
+        return match.toDomain(
+            businessName: sale.businessName,
+            dealKind: .commercialBid,
+            agreedAmount: sale.acceptedBid?.amount ?? sale.askingPrice,
+            counterpartyName: sale.acceptedBid?.bidderName ?? "Buyer",
+            currentUserId: currentUserId(),
+            messages: messages
+        )
     }
 }
 

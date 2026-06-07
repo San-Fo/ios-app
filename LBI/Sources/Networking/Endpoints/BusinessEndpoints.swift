@@ -2,31 +2,46 @@ import Foundation
 
 /// API endpoints for business discovery, search and detail.
 ///
-/// TODO(API): confirm paths, query params and pagination with the backend team.
-/// This is the single place to wire the business contract.
+/// The backend returns the same `Business` shape (with `sale` folded in and
+/// confidential fields redacted per viewer) for list/search/detail/saved.
 enum BusinessEndpoints {
-    static func recommended() -> Endpoint<[BusinessDTO]> {
-        Endpoint(path: "businesses/recommended", method: .get)
+    /// Verified businesses matching the user's followed categories/intents,
+    /// ranked by proximity then popularity. Excludes the caller's own listings.
+    static func recommended(limit: Int = 20) -> Endpoint<[BusinessDTO]> {
+        Endpoint(
+            path: "businesses/recommended",
+            method: .get,
+            query: [URLQueryItem(name: "limit", value: String(limit))]
+        )
     }
 
-    static func list(query: BusinessQuery) -> Endpoint<[BusinessDTO]> {
+    /// Public full-text search + filters. Verified listings only.
+    /// Supported params: `q`, `category` (single), `lat`/`lng`, `radius`, `limit`.
+    static func search(query: BusinessQuery, limit: Int = 20) -> Endpoint<[BusinessDTO]> {
         var items: [URLQueryItem] = []
         if !query.text.isEmpty {
             items.append(URLQueryItem(name: "q", value: query.text))
         }
-        for category in query.categories {
-            items.append(URLQueryItem(name: "category", value: category.rawValue))
+        // The backend accepts a single category filter; send the first selected.
+        if let category = query.categories.first {
+            items.append(URLQueryItem(name: "category", value: category.serverValue))
         }
-        for district in query.districts {
-            items.append(URLQueryItem(name: "district", value: district.rawValue))
-        }
-        for kind in query.fundingKinds {
-            items.append(URLQueryItem(name: "funding", value: kind.rawValue))
-        }
-        return Endpoint(path: "businesses", method: .get, query: items)
+        items.append(URLQueryItem(name: "limit", value: String(limit)))
+        return Endpoint(path: "businesses/search", method: .get, query: items, requiresAuth: false)
     }
 
-    static func detail(id: String) -> Endpoint<BusinessDetailDTO> {
+    /// Business detail (auth optional). Increments the view count for non-owners.
+    static func detail(id: String) -> Endpoint<BusinessDTO> {
         Endpoint(path: "businesses/\(id)", method: .get)
+    }
+
+    /// The caller's own listings (all statuses).
+    static func mine() -> Endpoint<[BusinessDTO]> {
+        Endpoint(path: "me/businesses", method: .get)
+    }
+
+    /// Increments the like count (not allowed on your own business).
+    static func like(id: String) -> Endpoint<EmptyResponse> {
+        Endpoint(path: "businesses/\(id)/like", method: .post)
     }
 }

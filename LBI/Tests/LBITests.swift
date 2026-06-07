@@ -63,30 +63,92 @@ struct LBITests {
         #expect(results.first?.id == "biz-003")
     }
 
-    @Test func businessDTOMapsToDomain() {
-        let dto = BusinessDTO(
-            id: "x",
-            name: "Test Shop",
-            category: "bakery",
-            district: "wanChai",
-            storyHeadline: "A headline",
-            heroImageURL: nil,
-            status: "raising",
-            fundingGoal: 100,
-            fundingRaised: 50,
-            fundingOptions: ["revenueShare", "unknownKind"],
-            yearEstablished: 1980,
-            deadline: nil,
-            savedCount: 12,
-            viewCount: 99
-        )
-        let business = dto.toDomain()
-        #expect(business.category == .bakery)
+    private func decodeBusiness(_ json: String) throws -> BusinessDTO {
+        try JSONDecoder.lbiDefault.decode(BusinessDTO.self, from: Data(json.utf8))
+    }
+
+    @Test func businessDTODecodesAndMapsSummary() throws {
+        // Server-shaped Business: revenue-share-loan intent + stats.
+        let dto = try decodeBusiness("""
+        {
+          "id": "x",
+          "ownerUserId": "owner-1",
+          "name": "Test Shop",
+          "description": "A beloved corner bakery.",
+          "foundingYear": 1980,
+          "categories": ["cafe"],
+          "district": "wanChai",
+          "verificationStatus": "verified",
+          "financialIntent": { "revenueShareLoan": { "targetAmount": 50000, "totalInterestPercentage": 8, "totalRevenueCutPercentage": 5 } },
+          "galleryImageUrls": ["https://example.com/a.jpg"],
+          "listingStatistics": { "viewCount": 99, "likeCount": 12 }
+        }
+        """)
+        let business = dto.toSummary()
+        #expect(business.name == "Test Shop")
         #expect(business.district == .wanChai)
-        #expect(business.fundingProgress == 0.5)
-        #expect(business.fundingOptions == [.revenueShare])
+        #expect(business.storyHeadline == "A beloved corner bakery.")
+        #expect(business.fundingOptions.contains(.revenueShare))
         #expect(business.yearEstablished == 1980)
         #expect(business.savedCount == 12)
+        #expect(business.viewCount == 99)
+        #expect(business.heroImageURL != nil)
+    }
+
+    @Test func businessDTOMapsOwnerToFounderAndDerivesEditorial() throws {
+        let dto = try decodeBusiness("""
+        {
+          "id": "x",
+          "ownerUserId": "owner-1",
+          "name": "Leung's",
+          "description": "Bespoke tailoring since 1979.",
+          "foundingYear": 1979,
+          "categories": ["services"],
+          "district": "central",
+          "financialIntent": { "sale": { "targetAmount": 2200000 } },
+          "owner": { "id": "owner-1", "name": "Leung Po-Wah", "biography": "Master tailor." }
+        }
+        """)
+        let detail = dto.toDetail()
+        #expect(detail.founderName == "Leung Po-Wah")
+        #expect(detail.founderStory == "Master tailor.")
+        #expect(detail.tagline == "Bespoke tailoring since 1979.")
+        #expect(detail.summary.fundingOptions.contains(.fullAcquisition))
+    }
+
+    @Test func businessSaleDTODecodesFoldedSale() throws {
+        let dto = try decodeBusiness("""
+        {
+          "id": "biz-x",
+          "ownerUserId": "owner-1",
+          "name": "Shop",
+          "description": "desc",
+          "categories": ["retail"],
+          "district": "mongKok",
+          "financialIntent": { "sale": { "targetAmount": 1000000 } },
+          "sale": {
+            "stage": "openToRetail",
+            "askingPrice": 1000000,
+            "financials": { "annualRevenue": 800000, "annualProfit": 160000, "staffCount": 2 },
+            "aiEvaluation": { "score": 88, "verdict": "recommendedForCommercialBidding", "strengths": ["Profit"], "risks": ["Lease"], "summary": "Strong" },
+            "retailFallback": { "askingPrice": 1200000, "allowOutrightPurchase": true, "allowGroupTakeover": true, "ownerNote": "Public" },
+            "bids": [
+              { "id": "bid-x", "bidderUserId": "u-1", "bidderName": "Buyer", "amount": 900000, "message": "Keep staff", "status": "submitted" },
+              { "id": "bid-g", "bidderUserId": "u-2", "bidderName": "Heritage Circle", "bidderGroupId": "grp-1", "amount": 950000, "status": "submitted" }
+            ]
+          }
+        }
+        """)
+        let sale = dto.toDetail().professionalSale
+        #expect(sale?.stage == .openToRetail)
+        #expect(sale?.aiEvaluation?.score == 88)
+        #expect(sale?.aiEvaluation?.rating == .strong)
+        #expect(sale?.retailFallbackOffer?.askingPrice == 1200000)
+        #expect(sale?.financials.staffCount == 2)
+        #expect(sale?.bids.count == 2)
+        // The group-tagged bid surfaces as a group offer.
+        #expect(sale?.groupOffers.count == 1)
+        #expect(sale?.groupOffers.first?.groupId == "grp-1")
     }
 
     @Test func fundingProgressClampsToOne() {
@@ -137,50 +199,10 @@ struct LBITests {
         #expect(rewards.first?.cardsRequired == 1)
     }
 
-    @Test func shareRewardDTOMapsToDomain() {
-        let dto = ShareRewardDTO(id: "r1", cardsRequired: 5, title: "Free coffee", detail: "Monthly")
-        let reward = dto.toDomain()
-        #expect(reward.cardsRequired == 5)
-        #expect(reward.title == "Free coffee")
-        #expect(reward.detail == "Monthly")
-    }
-
     @Test func revenueShareBreakdownSumsTo約100() {
         let terms = SampleData.wongNoodleShop.revenueShareTerms!
         let total = terms.useOfFundsBreakdown.reduce(0) { $0 + $1.percentage }
         #expect(abs(total - 100) < 1.0)
-    }
-
-    @Test func businessDetailDTOMapsRichFields() {
-        let dto = BusinessDetailDTO(
-            id: "x",
-            summary: BusinessDTO(
-                id: "x", name: "T", category: "gym", district: "eastern",
-                storyHeadline: "h", heroImageURL: nil, status: "seekingBuyer",
-                fundingGoal: 0, fundingRaised: 0, fundingOptions: ["fullAcquisition"],
-                yearEstablished: 1990, deadline: nil, savedCount: nil, viewCount: nil
-            ),
-            tagline: "tag",
-            founderName: "F",
-            founderStory: "s",
-            whyItMatters: "w",
-            communityMemories: [CommunityMemoryDTO(id: "m", author: "A", text: "t", yearsAgo: 3, authorInitials: nil, relationship: "Regular")],
-            snapshot: BusinessSnapshotDTO(foundedYear: 1990, employees: 2, monthlyRevenue: 1000, address: "addr", highlights: ["x"]),
-            useOfFunds: "u",
-            revenueShareTerms: nil,
-            partialOwnership: nil,
-            fullAcquisition: FullAcquisitionDTO(askingPrice: 500, openToGroupOffer: true, includes: ["a"], includesProperty: nil, leaseYearsRemaining: 5, monthlyRevenue: 1000, staffCount: 2, ownerWillingToStay: true, handoverMonths: 6),
-            hasTakeoverGroup: false,
-            galleryImageURLs: ["https://example.com/a.jpg"],
-            shareRewards: [ShareRewardDTO(id: "r", cardsRequired: 3, title: "Perk", detail: nil)],
-            professionalSale: nil
-        )
-        let detail = dto.toDomain()
-        #expect(detail.tagline == "tag")
-        #expect(detail.communityMemories.first?.relationship == "Regular")
-        #expect(detail.fullAcquisition?.ownerWillingToStay == true)
-        #expect(detail.galleryImageURLs.count == 1)
-        #expect(detail.shareRewards.first?.cardsRequired == 3)
     }
 
     @Test func sampleBusinessDetailIncludesProfessionalSale() {
@@ -191,44 +213,17 @@ struct LBITests {
         #expect(detail?.professionalSale?.bids.count == 2)
     }
 
-    @Test func professionalSaleDTOMapsToDomain() {
-        let dto = ProfessionalSaleDTO(
-            id: "sale-x",
-            businessId: "biz-x",
-            businessName: "Shop",
-            stage: "openToRetail",
-            askingPrice: 1_000_000,
-            aiEvaluation: SaleEvaluationDTO(score: 88, verdict: "recommendedForCommercialBidding", strengths: ["Profit"], risks: ["Lease"], summary: "Strong", recommendedAction: "Bid now", confidence: 0.9),
-            commercialBiddingEndsAt: Date(),
-            financials: SaleFinancialsDTO(
-                annualRevenue: 800_000,
-                annualProfit: 160_000,
-                monthlyRent: 20_000,
-                leaseYearsRemaining: 3,
-                staffCount: 2,
-                inventoryValue: 50_000,
-                notes: "Stable"
-            ),
-            includes: ["Brand"],
-            ownerWillingToStay: true,
-            handoverMonths: 6,
-            retailFallbackOffer: RetailFallbackOfferDTO(askingPrice: 1_200_000, allowOutrightPurchase: true, allowGroupTakeover: true, ownerNote: "Public fallback"),
-            bids: [
-                SaleBidDTO(id: "bid-x", bidderName: "Buyer", bidderCredential: "Operator", amount: 900_000, message: "Keep staff", date: Date(), status: "submitted")
-            ],
-            groupOffers: nil
-        )
-
-        let sale = dto.toDomain()
-        #expect(sale.stage == .openToRetail)
-        #expect(sale.aiEvaluation?.score == 88)
-        #expect(sale.aiEvaluation?.recommendedAction == "Bid now")
-        #expect(sale.aiEvaluation?.confidencePercent == 90)
-        #expect(sale.aiEvaluation?.rating == .strong)
-        #expect(sale.retailFallbackOffer?.askingPrice == 1_200_000)
-        #expect(sale.financials.staffCount == 2)
-        #expect(sale.includes == ["Brand"])
-        #expect(sale.bids.first?.amount == 900_000)
+    @Test func saleEvaluationMapsVerdictToRecommendedAction() {
+        let eval = SaleEvaluationDTO(
+            score: 88,
+            verdict: "recommendedForCommercialBidding",
+            strengths: ["Profit"],
+            risks: ["Lease"],
+            summary: "Strong"
+        ).toDomain()
+        #expect(eval.score == 88)
+        #expect(eval.rating == .strong)
+        #expect(!eval.recommendedAction.isEmpty) // derived client-side from verdict
     }
 
     @Test func evaluationRatingBucketsByScore() {

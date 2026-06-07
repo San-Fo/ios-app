@@ -1,50 +1,77 @@
 import Foundation
 
-/// API endpoints for the confidential professional sale + bidding.
-/// TODO(API): confirm paths and payloads with the backend team. Access to
-/// these endpoints must be gated server-side to verified professional accounts.
+/// API endpoints for the sale lifecycle. The sale is folded into the `Business`
+/// document, so every write returns the updated `Business`. Keyed by
+/// `businessId` (the backend sale has no separate id).
 enum SaleEndpoints {
-    static func sales() -> Endpoint<[ProfessionalSaleDTO]> {
+    /// Verified businesses with an active sale, redacted per viewer.
+    static func sales() -> Endpoint<[BusinessDTO]> {
         Endpoint(path: "sales", method: .get)
     }
 
-    static func sale(businessId: String) -> Endpoint<ProfessionalSaleDTO> {
+    /// A single business's sale (returns the full `Business`).
+    static func sale(businessId: String) -> Endpoint<BusinessDTO> {
         Endpoint(path: "businesses/\(businessId)/sale", method: .get)
     }
 
-    static func placeBid(saleId: String, amount: Decimal, message: String?) throws -> Endpoint<SaleBidDTO> {
+    /// Owner submits the business for acquisition.
+    static func submitSale(businessId: String, body: SubmitSaleBody) throws -> Endpoint<BusinessDTO> {
+        try .json(path: "businesses/\(businessId)/sale", method: .post, body: body)
+    }
+
+    /// Institutional investor places a commercial bid.
+    static func placeBid(businessId: String, amount: Decimal, message: String?) throws -> Endpoint<BusinessDTO> {
         try .json(
-            path: "sales/\(saleId)/bids",
+            path: "businesses/\(businessId)/sale/bids",
             method: .post,
             body: BidBody(amount: amount, message: message)
         )
     }
 
-    /// Accepting a bid finalises the sale AND opens a private deal conversation,
-    /// which the backend returns so the client can navigate straight into it.
-    static func acceptBid(saleId: String, bidId: String) -> Endpoint<AcceptOfferResultDTO> {
-        Endpoint(path: "sales/\(saleId)/bids/\(bidId)/accept", method: .post)
+    /// Owner accepts a bid. The backend also creates a private deal
+    /// conversation as a side effect; fetch it via the chat endpoints.
+    static func acceptBid(businessId: String, bidId: String) -> Endpoint<BusinessDTO> {
+        Endpoint(path: "businesses/\(businessId)/sale/bids/\(bidId)/accept", method: .post)
     }
 
-    static func acceptGroupOffer(saleId: String, offerId: String) -> Endpoint<AcceptOfferResultDTO> {
-        Endpoint(path: "sales/\(saleId)/group-offers/\(offerId)/accept", method: .post)
-    }
-
-    /// A solo retail buyer accepts the public fallback price; opens a deal chat.
-    static func acceptRetailPurchase(saleId: String) -> Endpoint<AcceptOfferResultDTO> {
-        Endpoint(path: "sales/\(saleId)/retail-purchase", method: .post)
-    }
-
-    static func declineCommercialBids(saleId: String, retailAskingPrice: Decimal, allowOutrightPurchase: Bool, allowGroupTakeover: Bool) throws -> Endpoint<ProfessionalSaleDTO> {
+    /// Owner declines all commercial bids and opens the retail fallback.
+    static func declineCommercialBids(
+        businessId: String,
+        retailAskingPrice: Decimal,
+        allowOutrightPurchase: Bool,
+        allowGroupTakeover: Bool,
+        ownerNote: String?
+    ) throws -> Endpoint<BusinessDTO> {
         try .json(
-            path: "sales/\(saleId)/decline-commercial-bids",
+            path: "businesses/\(businessId)/sale/decline-commercial-bids",
             method: .post,
-            body: RetailFallbackBody(
+            body: DeclineBody(
                 retailAskingPrice: retailAskingPrice,
                 allowOutrightPurchase: allowOutrightPurchase,
-                allowGroupTakeover: allowGroupTakeover
+                allowGroupTakeover: allowGroupTakeover,
+                ownerNote: ownerNote
             )
         )
+    }
+
+    // MARK: Bodies
+
+    struct SubmitSaleBody: Encodable {
+        let askingPrice: Decimal
+        let financials: FinancialsBody
+        let includes: [String]
+        let ownerWillingToStay: Bool
+        let handoverMonths: Int?
+
+        struct FinancialsBody: Encodable {
+            let annualRevenue: Decimal
+            let annualProfit: Decimal
+            let monthlyRent: Decimal?
+            let leaseYearsRemaining: Int?
+            let staffCount: Int
+            let inventoryValue: Decimal?
+            let notes: String?
+        }
     }
 
     private struct BidBody: Encodable {
@@ -52,9 +79,10 @@ enum SaleEndpoints {
         let message: String?
     }
 
-    private struct RetailFallbackBody: Encodable {
+    private struct DeclineBody: Encodable {
         let retailAskingPrice: Decimal
         let allowOutrightPurchase: Bool
         let allowGroupTakeover: Bool
+        let ownerNote: String?
     }
 }

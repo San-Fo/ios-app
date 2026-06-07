@@ -27,20 +27,18 @@ final class LiveBusinessRepository: BusinessRepository, @unchecked Sendable {
     }
 
     func recommended(for profile: UserProfile?) async throws -> [Business] {
-        // TODO(API): let dtos = try await client.send(BusinessEndpoints.recommended(...))
-        //            return dtos.map { $0.toDomain() }
         let dtos = try await client.send(BusinessEndpoints.recommended())
-        return dtos.map { $0.toDomain() }
+        return dtos.map { $0.toSummary() }
     }
 
     func list(query: BusinessQuery) async throws -> [Business] {
-        let dtos = try await client.send(BusinessEndpoints.list(query: query))
-        return dtos.map { $0.toDomain() }
+        let dtos = try await client.send(BusinessEndpoints.search(query: query))
+        return dtos.map { $0.toSummary() }
     }
 
     func detail(id: String) async throws -> BusinessDetail {
         let dto = try await client.send(BusinessEndpoints.detail(id: id))
-        return dto.toDomain()
+        return dto.toDetail()
     }
 }
 
