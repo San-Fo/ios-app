@@ -13,6 +13,19 @@ struct ConversationDTO: Decodable {
     let participantIds: [String]?
     let createdAt: BSONDate?
 
+    private enum CodingKeys: String, CodingKey {
+        case id, _id = "_id", kind, businessId, participantIds, createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? c.decode(String.self, forKey: ._id)
+        kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? "deal"
+        businessId = try c.decodeIfPresent(String.self, forKey: .businessId) ?? ""
+        participantIds = try c.decodeIfPresent([String].self, forKey: .participantIds)
+        createdAt = try c.decodeIfPresent(BSONDate.self, forKey: .createdAt)
+    }
+
     /// Maps to the app's `DealConversation`. Display fields not present on the
     /// wire model are filled by the caller (which knows the business/sale).
     func toDomain(
@@ -45,6 +58,19 @@ struct ChatMessageDTO: Decodable {
     let senderUserId: String
     let body: String
     let createdAt: BSONDate?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, _id = "_id", conversationId, senderUserId, body, createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? c.decode(String.self, forKey: ._id)
+        conversationId = try c.decodeIfPresent(String.self, forKey: .conversationId) ?? ""
+        senderUserId = try c.decodeIfPresent(String.self, forKey: .senderUserId) ?? ""
+        body = try c.decodeIfPresent(String.self, forKey: .body) ?? ""
+        createdAt = try c.decodeIfPresent(BSONDate.self, forKey: .createdAt)
+    }
 
     func toDomain(currentUserId: String?) -> DealMessage {
         DealMessage(

@@ -17,6 +17,23 @@ struct TakeoverGroupDTO: Decodable {
     let collectiveOffer: CollectiveOfferDTO?
     let createdAt: BSONDate?
 
+    private enum CodingKeys: String, CodingKey {
+        case id, _id = "_id", businessId, name, createdByUserId
+        case members, conversationId, collectiveOffer, createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? c.decode(String.self, forKey: ._id)
+        businessId = try c.decodeIfPresent(String.self, forKey: .businessId) ?? ""
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        createdByUserId = try c.decodeIfPresent(String.self, forKey: .createdByUserId) ?? ""
+        members = try c.decodeIfPresent([GroupMemberDTO].self, forKey: .members)
+        conversationId = try c.decodeIfPresent(String.self, forKey: .conversationId) ?? ""
+        collectiveOffer = try c.decodeIfPresent(CollectiveOfferDTO.self, forKey: .collectiveOffer)
+        createdAt = try c.decodeIfPresent(BSONDate.self, forKey: .createdAt)
+    }
+
     /// - Parameter businessName: resolved by the caller (the group has no name
     ///   of the business, only its id).
     func toDomain(businessName: String) -> TakeoverGroup {

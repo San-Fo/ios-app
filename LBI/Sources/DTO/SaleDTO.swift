@@ -142,6 +142,23 @@ struct SaleBidDTO: Decodable {
     let status: String
     let createdAt: BSONDate?
 
+    private enum CodingKeys: String, CodingKey {
+        case id, _id = "_id", bidderUserId, bidderName, bidderGroupId
+        case amount, message, status, createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? c.decode(String.self, forKey: ._id)
+        bidderUserId = try c.decodeIfPresent(String.self, forKey: .bidderUserId)
+        bidderName = try c.decodeIfPresent(String.self, forKey: .bidderName)
+        bidderGroupId = try c.decodeIfPresent(String.self, forKey: .bidderGroupId)
+        amount = try c.decode(Decimal.self, forKey: .amount)
+        message = try c.decodeIfPresent(String.self, forKey: .message)
+        status = try c.decodeIfPresent(String.self, forKey: .status) ?? "submitted"
+        createdAt = try c.decodeIfPresent(BSONDate.self, forKey: .createdAt)
+    }
+
     func toDomain() -> SaleBid {
         SaleBid(
             id: id,

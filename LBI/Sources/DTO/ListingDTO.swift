@@ -12,6 +12,19 @@ struct ActionDTO: Decodable {
     let kind: ActionKind
     let createdAt: BSONDate?
 
+    private enum CodingKeys: String, CodingKey {
+        case id, _id = "_id", userId, businessId, kind, createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? c.decode(String.self, forKey: ._id)
+        userId = try c.decodeIfPresent(String.self, forKey: .userId) ?? ""
+        businessId = try c.decodeIfPresent(String.self, forKey: .businessId) ?? ""
+        kind = try c.decode(ActionKind.self, forKey: .kind)
+        createdAt = try c.decodeIfPresent(BSONDate.self, forKey: .createdAt)
+    }
+
     enum ActionKind: Decodable {
         case purchase
         case donation(amount: Decimal, tier: String?)

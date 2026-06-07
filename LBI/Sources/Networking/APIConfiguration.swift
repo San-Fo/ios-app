@@ -42,10 +42,9 @@ struct APIConfiguration {
 
     static let live = APIConfiguration(
         environment: .development,
-        // ⚠️ MOCK MODE IS ON. The app is running entirely on in-memory sample
-        // data — no request reaches the backend. Set this to `false` to switch
-        // every repository to the real API (`LiveAPIClient` + `Live*Repository`).
-        useMockData: true,
+        // 🟢 LIVE MODE — every repository talks to the real backend at
+        // `baseURL`. Set back to `true` only to run fully offline on sample data.
+        useMockData: false,
         timeout: 30
     )
 
