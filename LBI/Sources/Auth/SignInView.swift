@@ -61,7 +61,7 @@ struct SignInView: View {
                 .disabled(auth.isWorking)
 
                 Button("Skip for now") {
-                    auth.skipSignIn()
+                    Task { await auth.skipSignIn() }
                 }
                 .font(.lbiSubtitle)
                 .foregroundStyle(Theme.Palette.inkSecondary)

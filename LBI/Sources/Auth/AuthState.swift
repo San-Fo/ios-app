@@ -90,11 +90,23 @@ final class AuthState {
         phase = .signedOut
     }
 
-    /// Bypass authentication and continue as a local guest user.
-    func skipSignIn() {
+    /// Continue without Apple sign-in.
+    ///
+    /// In live mode this still needs a real backend session (otherwise every
+    /// authenticated call — including `GET /me` — fails and the app can't leave
+    /// the loading screen), so it requests a guest session via dev sign-in. If
+    /// that's unavailable (mock mode, or backend down) it falls back to a purely
+    /// local guest so the app remains usable offline.
+    func skipSignIn() async {
+        isWorking = true
         errorMessage = nil
-        phase = .signedIn(
-            AuthenticatedUser(id: "guest-user", displayName: "Guest", email: nil)
-        )
+        defer { isWorking = false }
+        do {
+            let user = try await service.signInDev(subject: nil, investorStatus: nil, name: "Guest")
+            phase = .signedIn(user)
+        } catch {
+            // No backend session available — continue as a local-only guest.
+            phase = .signedIn(AuthenticatedUser(id: "guest-user", displayName: "Guest", email: nil))
+        }
     }
 }
