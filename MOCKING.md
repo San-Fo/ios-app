@@ -75,8 +75,13 @@ These currently no-op / echo on the live path and need a decision or endpoint:
 | `Live.askFounder` | returns a local echo | Add a founder-Q&A endpoint, or we drop the feature. |
 | `Live.dealUpdateStatus` | re-fetches, ignores status | Add deal lifecycle status (negotiating / paymentPending / completed), or we keep it client-only. |
 | `Live.acceptRetailPurchase` | throws `notFound` | Add a retail-purchase accept that opens a deal conversation, or confirm retail purchase is only a `purchase` Action with no chat. |
-| `Live.verifyKYB.generic` | returns `pending` | KYB is per-business; we will trigger `POST /businesses/{id}/verify` from the owner's listing screen (wiring pending). |
 | `Live.verifySkipOverride` | falls back to `submit` | Confirm there is no "skip/override grant" endpoint; we treat skip as submit. |
+
+KYB is now wired correctly: after the listing flow creates the business
+(`POST /businesses`), it immediately prompts `BusinessVerificationView`, which
+calls `verifyBusiness(businessId:)` → `POST /businesses/{id}/verify`, locking the
+listing to a verified KYB and granting the owner role. The generic verification
+section no longer offers KYB.
 
 ---
 

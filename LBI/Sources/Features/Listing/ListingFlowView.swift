@@ -12,28 +12,23 @@ struct ListingFlowView: View {
     @State private var submitted = false
     @State private var newRewardCards = ""
     @State private var newRewardTitle = ""
-    @State private var showVerification = false
-    /// Set once the user verifies or explicitly skips the KYB gate.
-    @State private var kybBypassed = false
+    /// The business id returned by the backend after the listing is created.
+    /// KYB verification is locked to this specific business.
+    @State private var createdBusinessId: String?
+    @State private var showBusinessVerification = false
+    /// True once KYB for the created business has been verified (or skipped).
+    @State private var businessVerified = false
 
     private let totalSteps = 5
 
-    private var isBusinessVerified: Bool {
-        profileStore.profile?.isBusinessVerified ?? false
-    }
-
     var body: some View {
         Group {
-            if !isBusinessVerified && !kybBypassed {
-                VerificationGateView(
-                    kind: .kyb,
-                    message: "Before listing a business for sale or financing, we verify the business exists and that you own it.",
-                    onVerify: { showVerification = true },
-                    onSkip: { kybBypassed = true }
-                )
-            } else if submitted {
+            if submitted {
                 successView
             } else {
+                // The listing is created first (status `pending`); business
+                // verification (KYB) happens per-business afterwards, from the
+                // Owner Desk, because the backend verifies a specific listing.
                 VStack(spacing: 0) {
                     progressBar
                     TabView(selection: $step) {
@@ -51,9 +46,11 @@ struct ListingFlowView: View {
         .background(Theme.Palette.paper)
         .navigationTitle("List your business")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showVerification) {
-            VerificationFlowView(kind: .kyb) { approved in
-                if approved { kybBypassed = true }
+        .sheet(isPresented: $showBusinessVerification) {
+            if let businessId = createdBusinessId {
+                BusinessVerificationView(businessId: businessId, businessName: draft.businessName) { verified in
+                    businessVerified = verified
+                }
             }
         }
     }
@@ -232,12 +229,35 @@ struct ListingFlowView: View {
     private var successView: some View {
         VStack(spacing: Theme.Spacing.md) {
             Spacer()
-            Image(systemName: "checkmark.seal.fill").font(.system(size: 64)).foregroundStyle(Theme.Palette.jade)
-            Text("Listing submitted").font(.lbiTitle).inkStyle()
-            Text("The backend AI will evaluate your business. Strong sale candidates go to commercial investors first; if you decline their bids, your retail fallback price can open to public buyers or group takeover. We’ll reach out at \(draft.contactEmail).")
-                .font(.lbiBody).inkSecondaryStyle().multilineTextAlignment(.center).padding(.horizontal, Theme.Spacing.lg)
+            Image(systemName: businessVerified ? "checkmark.seal.fill" : "doc.badge.clock")
+                .font(.system(size: 64))
+                .foregroundStyle(businessVerified ? Theme.Palette.jade : Theme.Palette.gold)
+
+            Text(businessVerified ? "Listing verified" : "Listing created — verify to publish")
+                .font(.lbiTitle).inkStyle()
+                .multilineTextAlignment(.center)
+
+            if businessVerified {
+                Text("Your business is verified and live. The backend AI will evaluate it; strong sale candidates go to commercial investors first, then your retail fallback can open to public buyers or a group takeover.")
+                    .font(.lbiBody).inkSecondaryStyle().multilineTextAlignment(.center).padding(.horizontal, Theme.Spacing.lg)
+            } else {
+                Text("Your listing was created but stays private until you verify the business and your ownership. This locks the listing to a verified KYB.")
+                    .font(.lbiBody).inkSecondaryStyle().multilineTextAlignment(.center).padding(.horizontal, Theme.Spacing.lg)
+            }
+
             Spacer()
-            PrimaryButton("Done") { dismiss() }.padding(Theme.Spacing.lg)
+
+            VStack(spacing: Theme.Spacing.sm) {
+                if !businessVerified {
+                    PrimaryButton("Verify business now", systemImage: "checkmark.shield.fill") {
+                        showBusinessVerification = true
+                    }
+                    SecondaryButton("Verify later") { dismiss() }
+                } else {
+                    PrimaryButton("Done") { dismiss() }
+                }
+            }
+            .padding(Theme.Spacing.lg)
         }
     }
 
@@ -264,8 +284,13 @@ struct ListingFlowView: View {
             Task {
                 isSubmitting = true
                 defer { isSubmitting = false }
-                try? await environment.listingRepository.submitListing(draft)
+                // Create the listing (pending), capture its id, then prompt KYB
+                // so the listing can be locked to a verified business.
+                createdBusinessId = try? await environment.listingRepository.submitListing(draft)
                 submitted = true
+                if createdBusinessId != nil {
+                    showBusinessVerification = true
+                }
             }
         }
     }

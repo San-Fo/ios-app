@@ -16,6 +16,9 @@ protocol VerificationRepository: Sendable {
     /// without completing verification (records the status as `skipped`).
     /// In production this is an authorised override; here it lets demos proceed.
     func skipWithOverride(kind: VerificationKind) async throws -> VerificationOutcome
+    /// KYB for a specific business: `POST /businesses/{id}/verify`. Marks the
+    /// listing verified and grants the owner role. Returns the outcome.
+    func verifyBusiness(businessId: String) async throws -> VerificationOutcome
 }
 
 // MARK: - Live
@@ -49,15 +52,10 @@ final class LiveVerificationRepository: VerificationRepository, @unchecked Senda
             let dto = try await client.send(try VerificationEndpoints.verifyMe(institutional: institutional))
             return outcome(for: kind, from: dto)
         case .kyb:
-            // NO_BACKEND (generic flow): KYB is per-business on the backend
-            // (POST /businesses/{id}/verify) and cannot be completed without a
-            // business id. Surfaced as pending until done from a listing screen.
-            // TODO(API): drive KYB from the owner's listing screen with a business id.
-            MockMarker.hit(.noBackend, "Live.verifyKYB.generic", "KYB needs a businessId; use listing screen")
-            return VerificationOutcome(
-                record: VerificationRecord(kind: .kyb, status: .pending, submittedAt: Date()),
-                grantedRole: nil
-            )
+            // KYB is per-business: it requires a business id and must go through
+            // `verifyBusiness(businessId:)` from the owner's listing screen, not
+            // this generic identity/investor flow.
+            throw APIError.invalidRequest("KYB must be submitted per business via verifyBusiness(businessId:)")
         }
     }
 
@@ -66,6 +64,16 @@ final class LiveVerificationRepository: VerificationRepository, @unchecked Senda
         // as a standard submission (which the mock backend auto-approves).
         MockMarker.hit(.noBackend, "Live.verifySkipOverride", "no skip endpoint; falls back to submit")
         return try await submit(kind: kind, documentLabels: [])
+    }
+
+    func verifyBusiness(businessId: String) async throws -> VerificationOutcome {
+        // POST /businesses/{id}/verify marks the listing verified; this also
+        // makes the caller a verified business owner.
+        _ = try await client.send(try VerificationEndpoints.verifyBusiness(id: businessId))
+        return VerificationOutcome(
+            record: VerificationRecord(kind: .kyb, status: .approved, submittedAt: Date()),
+            grantedRole: .owner
+        )
     }
 
     /// Builds an outcome from the User returned by `POST /me/verify`.
@@ -114,6 +122,15 @@ final class MockVerificationRepository: VerificationRepository, @unchecked Senda
             let record = VerificationRecord(kind: kind, status: .skipped, submittedAt: Date())
             records[kind] = record
             return VerificationOutcome(record: record, grantedRole: Self.roleGrant(for: kind))
+        }
+    }
+
+    func verifyBusiness(businessId: String) async throws -> VerificationOutcome {
+        MockMarker.hit(.mock, "MockVerificationRepository.verifyBusiness", "auto-approves business KYB")
+        return mutex.withLock {
+            let record = VerificationRecord(kind: .kyb, status: .approved, submittedAt: Date())
+            records[.kyb] = record
+            return VerificationOutcome(record: record, grantedRole: .owner)
         }
     }
 

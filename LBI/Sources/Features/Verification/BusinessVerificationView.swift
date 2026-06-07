@@ -1,48 +1,39 @@
 import SwiftUI
 
-/// A reusable, skippable verification flow for KYC / KYB / pro-investor.
+/// Per-business KYB verification, locked to a specific listing.
 ///
-/// Document capture is mocked (tap to attach a placeholder reference). On
-/// submit, the backend reviews the documents; the mock auto-approves so the
-/// demo can proceed. The whole flow can be skipped for demo purposes.
-struct VerificationFlowView: View {
-    let kind: VerificationKind
-    /// Called when the flow finishes. `approved` is true if verification was
-    /// submitted/approved, false if the user skipped.
-    var onFinish: (_ approved: Bool) -> Void
+/// Unlike the generic `VerificationFlowView`, this is bound to a `businessId`
+/// and calls `POST /businesses/{id}/verify`, which marks the listing verified
+/// (publishing it) and makes the caller a verified business owner. Skippable
+/// for demos — the listing simply stays unverified/private.
+struct BusinessVerificationView: View {
+    let businessId: String
+    let businessName: String
+    /// Called when finished. `verified` is true on success, false on skip.
+    var onFinish: (_ verified: Bool) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @Environment(AppEnvironment.self) private var environment
     @Environment(ProfileStore.self) private var profileStore
 
-    @State private var documents: [VerificationDocument]
+    @State private var documents: [VerificationDocument] = VerificationKind.kyb.requiredDocuments
     @State private var isSubmitting = false
-    @State private var result: VerificationStatus?
-
-    init(kind: VerificationKind, onFinish: @escaping (_ approved: Bool) -> Void) {
-        self.kind = kind
-        self.onFinish = onFinish
-        _documents = State(initialValue: kind.requiredDocuments)
-    }
+    @State private var verified = false
 
     var body: some View {
         NavigationStack {
             Group {
-                if let result {
-                    resultView(result)
-                } else {
-                    form
-                }
+                if verified { resultView } else { form }
             }
             .background(Theme.Palette.paper)
-            .navigationTitle(kind.shortTitle)
+            .navigationTitle("Business (KYB)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
                         .foregroundStyle(Theme.Palette.inkSecondary)
                 }
-                if result == nil {
+                if !verified {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Skip for now") { skip() }
                             .foregroundStyle(Theme.Palette.inkSecondary)
@@ -64,7 +55,7 @@ struct VerificationFlowView: View {
                 }
 
                 CardContainer {
-                    Text("Your documents are reviewed securely. You can skip this for now — some features stay locked until you're verified.")
+                    Text("Verifying confirms the business exists and that you own it. Your listing for \(businessName) stays private until this is approved, then it's locked to your verified KYB.")
                         .font(.lbiCaption)
                         .inkSecondaryStyle()
                         .fixedSize(horizontal: false, vertical: true)
@@ -91,8 +82,8 @@ struct VerificationFlowView: View {
             Image(systemName: "checkmark.shield.fill")
                 .font(.system(size: 34))
                 .foregroundStyle(Theme.Palette.red)
-            Text(kind.title).font(.lbiTitle).inkStyle()
-            Text(kind.subtitle)
+            Text("Verify \(businessName)").font(.lbiTitle).inkStyle()
+            Text(VerificationKind.kyb.subtitle)
                 .font(.lbiBody)
                 .inkSecondaryStyle()
                 .fixedSize(horizontal: false, vertical: true)
@@ -101,7 +92,7 @@ struct VerificationFlowView: View {
 
     private func documentRow(_ doc: Binding<VerificationDocument>) -> some View {
         Button {
-            // Mock attach: in production this opens a document/photo picker.
+            // Mock attach: production opens a document/photo picker.
             doc.wrappedValue.reference = "attached-\(UUID().uuidString.prefix(8))"
         } label: {
             HStack(spacing: Theme.Spacing.md) {
@@ -123,17 +114,14 @@ struct VerificationFlowView: View {
         .buttonStyle(.plain)
     }
 
-    private func resultView(_ status: VerificationStatus) -> some View {
+    private var resultView: some View {
         VStack(spacing: Theme.Spacing.md) {
             Spacer()
-            Image(systemName: status.isApproved ? "checkmark.seal.fill" : "clock.fill")
+            Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 64))
-                .foregroundStyle(status.isApproved ? Theme.Palette.jade : Theme.Palette.gold)
-            Text(status.isApproved ? "You're verified" : "Submitted for review")
-                .font(.lbiTitle).inkStyle()
-            Text(status.isApproved
-                ? "Your \(kind.shortTitle) check is approved. The related features are now unlocked."
-                : "We'll review your \(kind.shortTitle) documents and update your status shortly.")
+                .foregroundStyle(Theme.Palette.jade)
+            Text("Business verified").font(.lbiTitle).inkStyle()
+            Text("\(businessName) is now verified and published. You're a verified business owner.")
                 .font(.lbiBody).inkSecondaryStyle()
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, Theme.Spacing.lg)
@@ -151,32 +139,23 @@ struct VerificationFlowView: View {
     private func submit() async {
         isSubmitting = true
         defer { isSubmitting = false }
-        let labels = documents.map(\.label)
-        // The server reviews the submission and decides both the status and any
-        // role grant; the client just applies whatever comes back.
-        guard let outcome = try? await environment.verificationRepository.submit(kind: kind, documentLabels: labels) else {
-            result = .pending
+        // KYB is per-business: verify this specific listing and apply the
+        // server-granted outcome (verified status + owner role).
+        guard let outcome = try? await environment.verificationRepository.verifyBusiness(businessId: businessId) else {
             return
         }
         await profileStore.applyVerificationOutcome(outcome)
-        result = outcome.record.status
+        verified = true
     }
 
     private func skip() {
-        // Override skip is still a server decision: it may grant the role while
-        // recording the verification as skipped.
-        Task {
-            if let outcome = try? await environment.verificationRepository.skipWithOverride(kind: kind) {
-                await profileStore.applyVerificationOutcome(outcome)
-            }
-            onFinish(false)
-            dismiss()
-        }
+        onFinish(false)
+        dismiss()
     }
 }
 
 #Preview {
-    VerificationFlowView(kind: .proInvestor) { _ in }
+    BusinessVerificationView(businessId: "biz-1", businessName: "Wong's Noodles") { _ in }
         .environment(AppEnvironment.preview)
         .environment(previewProfileStore())
 }

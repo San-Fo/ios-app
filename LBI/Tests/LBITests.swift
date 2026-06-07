@@ -454,6 +454,23 @@ struct LBITests {
         #expect(outcome.grantedRole == .professional)
     }
 
+    @Test func verifyBusinessApprovesKYBAndGrantsOwnerRole() async throws {
+        // Per-business KYB: verifying a specific listing approves KYB and makes
+        // the caller a verified business owner.
+        let repo = MockVerificationRepository()
+        let outcome = try await repo.verifyBusiness(businessId: "biz-1")
+        #expect(outcome.record.kind == .kyb)
+        #expect(outcome.record.status == .approved)
+        #expect(outcome.grantedRole == .owner)
+    }
+
+    @Test func listingSubmissionReturnsBusinessIdForKYB() async throws {
+        // The listing flow needs the created business id to lock KYB to it.
+        let repo = MockListingRepository()
+        let id = try await repo.submitListing(ListingDraft())
+        #expect(!id.isEmpty)
+    }
+
     @Test func profileStoreAppliesServerGrantedRole() async throws {
         let profileRepo = MockProfileRepository()
         let store = await ProfileStore(repository: profileRepo)

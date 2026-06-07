@@ -147,9 +147,11 @@ struct ProfileView: View {
 
     private func verificationSection(_ profile: UserProfile) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            SectionHeader(title: "Verification", subtitle: "Unlock listing, financing and investor features")
+            SectionHeader(title: "Verification", subtitle: "Unlock financing and investor features")
+            // Identity (KYC) and investor accreditation are user-level here.
+            // Business verification (KYB) is per-listing — done from the listing
+            // flow / Owner Desk, not this generic section.
             verificationRow(profile, kind: .kyc)
-            verificationRow(profile, kind: .kyb)
             verificationRow(profile, kind: .proInvestor)
 
             if profile.isProInvestorVerified && profile.role != .professional {

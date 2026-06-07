@@ -23,7 +23,9 @@ struct ListingDraft: Equatable {
 
 /// Handles owner listing submissions and supporter investment actions.
 protocol ListingRepository: Sendable {
-    func submitListing(_ draft: ListingDraft) async throws
+    /// Creates the listing (status `pending`) and returns the new business id.
+    /// The caller then prompts KYB for that id to verify and publish it.
+    func submitListing(_ draft: ListingDraft) async throws -> String
     func recordInvestment(businessId: String, businessName: String, kind: FundingKind, amount: Decimal) async throws -> InvestmentRecord
 }
 
@@ -33,7 +35,7 @@ final class LiveListingRepository: ListingRepository, @unchecked Sendable {
     private let client: APIClient
     init(client: APIClient) { self.client = client }
 
-    func submitListing(_ draft: ListingDraft) async throws {
+    func submitListing(_ draft: ListingDraft) async throws -> String {
         // Step 1: create the business listing (created `pending`).
         let create = ListingEndpoints.CreateBusinessBody(
             name: draft.businessName,
@@ -69,6 +71,7 @@ final class LiveListingRepository: ListingRepository, @unchecked Sendable {
             _ = try await client.send(try SaleEndpoints.submitSale(businessId: business.id, body: saleBody))
         }
         // TODO(API): photo upload once the backend defines it.
+        return business.id
     }
 
     func recordInvestment(businessId: String, businessName: String, kind: FundingKind, amount: Decimal) async throws -> InvestmentRecord {
@@ -107,9 +110,11 @@ final class LiveListingRepository: ListingRepository, @unchecked Sendable {
 /// ⚠️ MOCK — listing submission and actions are no-ops that fake success.
 /// Active only when `APIConfiguration.useMockData == true`.
 final class MockListingRepository: ListingRepository, @unchecked Sendable {
-    func submitListing(_ draft: ListingDraft) async throws {
+    func submitListing(_ draft: ListingDraft) async throws -> String {
         MockMarker.hit(.mock, "MockListingRepository.submitListing", "fakes success; nothing persisted")
         try await Task.sleep(nanoseconds: 400_000_000)
+        // Return a synthetic business id so the KYB step can proceed in demos.
+        return "mock-business-\(UUID().uuidString.prefix(8))"
     }
 
     func recordInvestment(businessId: String, businessName: String, kind: FundingKind, amount: Decimal) async throws -> InvestmentRecord {
