@@ -11,6 +11,10 @@ struct AuthenticatedUser: Equatable, Identifiable {
 protocol AuthService: Sendable {
     /// Exchanges an Apple credential for a backend session and stores the token.
     func signInWithApple(_ credential: AppleCredential) async throws -> AuthenticatedUser
+    /// Dev-only sign in (`POST /auth/dev`, backend must run with `DEV_AUTH=1`).
+    /// Lets us obtain a session — optionally with a forced investor status —
+    /// without a real Apple token, for testing against the live server.
+    func signInDev(subject: String?, investorStatus: String?, name: String?) async throws -> AuthenticatedUser
     /// Returns the current user if a stored token is still valid.
     func restoreSession() async throws -> AuthenticatedUser?
     /// Clears the session locally (and server-side when possible).
@@ -38,6 +42,22 @@ final class LiveAuthService: AuthService, @unchecked Sendable {
             id: response.user.id,
             displayName: response.user.displayName ?? credential.fullName,
             email: response.user.email ?? credential.email
+        )
+    }
+
+    func signInDev(subject: String?, investorStatus: String?, name: String?) async throws -> AuthenticatedUser {
+        let request = DevSignInRequest(
+            subject: subject,
+            investorStatus: investorStatus,
+            verificationState: nil,
+            name: name
+        )
+        let response = try await client.send(try AuthEndpoints.signInDev(request))
+        tokenStore.save(token: response.sessionToken)
+        return AuthenticatedUser(
+            id: response.user.id,
+            displayName: response.user.displayName ?? name,
+            email: response.user.email
         )
     }
 
@@ -75,6 +95,12 @@ final class MockAuthService: AuthService, @unchecked Sendable {
 
     func signInWithApple(_ credential: AppleCredential) async throws -> AuthenticatedUser {
         MockMarker.hit(.mock, "MockAuthService.signInWithApple", "no Apple verification; stub token + user")
+        tokenStore.save(token: "mock-token")
+        return stubbedUser
+    }
+
+    func signInDev(subject: String?, investorStatus: String?, name: String?) async throws -> AuthenticatedUser {
+        MockMarker.hit(.mock, "MockAuthService.signInDev", "stub dev session")
         tokenStore.save(token: "mock-token")
         return stubbedUser
     }

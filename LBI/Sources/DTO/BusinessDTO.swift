@@ -25,6 +25,35 @@ struct BusinessDTO: Decodable {
     let listingStatistics: ListingStatisticsDTO?
     let createdAt: BSONDate?
 
+    /// Accept `id` or `_id` for the primary key (the backend uses both across
+    /// payloads), and tolerate missing optional fields.
+    private enum CodingKeys: String, CodingKey {
+        case id, _id = "_id"
+        case ownerUserId, name, description, foundingYear, categories, district
+        case location, financialIntent, verificationStatus, sale
+        case galleryImageUrls, owner, listingStatistics, createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id)
+            ?? c.decode(String.self, forKey: ._id)
+        ownerUserId = try c.decodeIfPresent(String.self, forKey: .ownerUserId) ?? ""
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        description = try c.decodeIfPresent(String.self, forKey: .description) ?? ""
+        foundingYear = try c.decodeIfPresent(Int.self, forKey: .foundingYear)
+        categories = try c.decodeIfPresent([String].self, forKey: .categories)
+        district = try c.decodeIfPresent(String.self, forKey: .district)
+        location = try c.decodeIfPresent(BusinessLocationDTO.self, forKey: .location)
+        financialIntent = try c.decodeIfPresent(BusinessFinancialIntentDTO.self, forKey: .financialIntent)
+        verificationStatus = try c.decodeIfPresent(String.self, forKey: .verificationStatus)
+        sale = try c.decodeIfPresent(BusinessSaleDTO.self, forKey: .sale)
+        galleryImageUrls = try c.decodeIfPresent([String].self, forKey: .galleryImageUrls)
+        owner = try c.decodeIfPresent(OwnerSummaryDTO.self, forKey: .owner)
+        listingStatistics = try c.decodeIfPresent(ListingStatisticsDTO.self, forKey: .listingStatistics)
+        createdAt = try c.decodeIfPresent(BSONDate.self, forKey: .createdAt)
+    }
+
     /// First category mapped to the app's richer category set (fallback shop).
     private var primaryCategory: BusinessCategory {
         categories?.first.flatMap(BusinessCategory.fromServer) ?? .traditionalShop

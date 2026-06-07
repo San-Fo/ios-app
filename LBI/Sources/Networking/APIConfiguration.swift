@@ -11,17 +11,16 @@ struct APIConfiguration {
         case staging
         case production
 
-        /// Base URLs. Local dev points at the backend's default bind
-        /// (`0.0.0.0:3000`). Staging/production hosts are placeholders until
-        /// the backend team provides them.
+        /// Base URLs. Development points at the hosted backend behind the proxy.
+        /// (Spec: base URL is `<host>/api/v1`.)
         var baseURL: URL {
             switch self {
             case .development:
-                return URL(string: "http://localhost:3000/api/v1")!
+                return URL(string: "https://lbi.proxied.zone/api/v1")!
             case .staging:
-                return URL(string: "https://staging.api.sanfo.example/api/v1")!
+                return URL(string: "https://lbi.proxied.zone/api/v1")!
             case .production:
-                return URL(string: "https://api.sanfo.example/api/v1")!
+                return URL(string: "https://lbi.proxied.zone/api/v1")!
             }
         }
     }

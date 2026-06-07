@@ -68,6 +68,22 @@ final class AuthState {
         }
     }
 
+    /// Dev-only sign in for testing against the live backend (needs `DEV_AUTH=1`).
+    /// Optionally forces an investor status, e.g. `institutionalVerified`.
+    func signInDev(subject: String? = nil, investorStatus: String? = nil, name: String? = nil) async {
+        isWorking = true
+        errorMessage = nil
+        defer { isWorking = false }
+        do {
+            let user = try await service.signInDev(subject: subject, investorStatus: investorStatus, name: name)
+            phase = .signedIn(user)
+        } catch let error as APIError {
+            errorMessage = error.userMessage
+        } catch {
+            errorMessage = "Dev sign in failed."
+        }
+    }
+
     /// Clears the session and returns to the signed-out gate.
     func signOut() async {
         await service.signOut()

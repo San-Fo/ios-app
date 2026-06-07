@@ -27,6 +27,39 @@ struct UserProfileDTO: Decodable {
     let hasCompletedOnboarding: Bool?
     let createdAt: BSONDate?
 
+    /// The backend serializes the primary key as `_id` in some payloads (e.g.
+    /// `/auth/dev`) and `id` in others. Accept either so decoding never breaks.
+    private enum CodingKeys: String, CodingKey {
+        case id, _id = "_id"
+        case appleUserId, verificationState, investorStatus, name, email
+        case biography, birthDate, address, profileImageUrl, location, language
+        case followedCategories, districts, financialIntents, savedBusinessIds
+        case hasCompletedOnboarding, createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id)
+            ?? c.decode(String.self, forKey: ._id)
+        appleUserId = try c.decodeIfPresent(String.self, forKey: .appleUserId)
+        verificationState = try c.decodeIfPresent(String.self, forKey: .verificationState)
+        investorStatus = try c.decodeIfPresent(String.self, forKey: .investorStatus)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        email = try c.decodeIfPresent(String.self, forKey: .email)
+        biography = try c.decodeIfPresent(String.self, forKey: .biography)
+        birthDate = try c.decodeIfPresent(BSONDate.self, forKey: .birthDate)
+        address = try c.decodeIfPresent(String.self, forKey: .address)
+        profileImageUrl = try c.decodeIfPresent(String.self, forKey: .profileImageUrl)
+        location = try c.decodeIfPresent(GeoPointDTO.self, forKey: .location)
+        language = try c.decodeIfPresent(String.self, forKey: .language)
+        followedCategories = try c.decodeIfPresent([String].self, forKey: .followedCategories)
+        districts = try c.decodeIfPresent([String].self, forKey: .districts)
+        financialIntents = try c.decodeIfPresent([String].self, forKey: .financialIntents)
+        savedBusinessIds = try c.decodeIfPresent([String].self, forKey: .savedBusinessIds)
+        hasCompletedOnboarding = try c.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding)
+        createdAt = try c.decodeIfPresent(BSONDate.self, forKey: .createdAt)
+    }
+
     /// Passthrough for the auth layer (no dedicated display name on the server).
     var displayName: String? { name }
 

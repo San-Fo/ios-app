@@ -390,6 +390,20 @@ struct LBITests {
         #expect(profile.verificationStatus(.kyb).needsAction)
     }
 
+    @Test func authSessionResponseDecodesRealDevPayload() throws {
+        // Verbatim shape returned by POST /auth/dev (note `_id`, BSON date).
+        let json = """
+        {"sessionToken":"e95ec036","user":{"_id":"57e1c1dd","appleUserId":"dev:client-test","verificationState":"unverified","investorStatus":"institutionalVerified","name":"Client Test","email":null,"birthDate":null,"location":null,"language":null,"followedCategories":[],"districts":[],"financialIntents":[],"savedBusinessIds":[],"hasCompletedOnboarding":false,"createdAt":{"$date":{"$numberLong":"1780808264339"}}}}
+        """
+        let resp = try JSONDecoder.lbiDefault.decode(AuthSessionResponse.self, from: Data(json.utf8))
+        #expect(resp.sessionToken == "e95ec036")
+        #expect(resp.user.id == "57e1c1dd") // mapped from `_id`
+        let profile = resp.user.toDomain(fallback: AuthenticatedUser(id: "x", displayName: nil, email: nil))
+        #expect(profile.isInstitutionalInvestor)
+        #expect(profile.isProInvestorVerified)
+        #expect(profile.role == .professional)
+    }
+
     @Test func profileDTOMapsVerificationStateFromServer() throws {
         let user = AuthenticatedUser(id: "u", displayName: "Demo", email: nil)
         let dto = try decodeUser("""
