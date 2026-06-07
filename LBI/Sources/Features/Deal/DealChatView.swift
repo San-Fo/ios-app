@@ -38,7 +38,7 @@ struct DealChatView: View {
             composer
         }
         .background(Theme.Palette.paper)
-        .navigationTitle(conversation.businessName)
+        .navigationTitle(conversation.businessName.isEmpty ? "Deal" : conversation.businessName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -73,9 +73,13 @@ struct DealChatView: View {
                 Text(conversation.dealKind.displayName)
                     .font(.lbiCaption).inkSecondaryStyle()
                 Spacer()
-                Text("Agreed \(Money.hkd(conversation.agreedAmount))")
-                    .font(.lbiMonoSmall)
-                    .foregroundStyle(Theme.Palette.red)
+                // Hide the agreed amount when unknown (e.g. opened from the
+                // conversation list, where the sale amount isn't loaded).
+                if conversation.agreedAmount > 0 {
+                    Text("Agreed \(Money.hkd(conversation.agreedAmount))")
+                        .font(.lbiMonoSmall)
+                        .foregroundStyle(Theme.Palette.red)
+                }
             }
         }
         .padding(Theme.Spacing.md)
