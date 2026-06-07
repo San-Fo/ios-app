@@ -89,11 +89,9 @@ struct SignInView: View {
             let credential = try await coordinator.signIn()
             await auth.signInWithApple(credential)
         } catch SignInWithAppleError.cancelled {
-            // ignore
+            // User cancelled — no error surfaced.
         } catch {
-            await auth.signInWithApple(
-                AppleCredential(identityToken: "", authorizationCode: nil, fullName: nil, email: nil)
-            )
+            auth.errorMessage = "Sign in failed. Please try again."
         }
     }
 }
