@@ -36,7 +36,11 @@ protocol ListingRepository: Sendable {
 
 final class LiveListingRepository: ListingRepository, @unchecked Sendable {
     private let client: APIClient
-    init(client: APIClient) { self.client = client }
+    private let imageUploader: ImageUploader
+    init(client: APIClient, imageUploader: ImageUploader) {
+        self.client = client
+        self.imageUploader = imageUploader
+    }
 
     func submitListing(_ draft: ListingDraft) async throws -> String {
         // Step 1: create the business listing (created `pending`).
@@ -44,13 +48,8 @@ final class LiveListingRepository: ListingRepository, @unchecked Sendable {
         // so supply safe defaults when the owner leaves optional fields blank.
         let currentYear = Calendar.current.component(.year, from: Date())
         let coordinate = draft.district.centroid
-        // Photos: no upload endpoint yet, so embed as data URLs (the backend
-        // accepts arbitrary strings in galleryImageUrls).
-        // TODO(API): replace with a real upload (multipart / pre-signed URL).
-        let galleryUrls = draft.photos.map { "data:image/jpeg;base64,\($0.base64EncodedString())" }
-        if !draft.photos.isEmpty {
-            MockMarker.hit(.noBackend, "Live.submitListing.photos", "no upload endpoint; data URLs")
-        }
+        // Photos are hosted via the ImageUploader seam (data URLs for now).
+        let galleryUrls = try await imageUploader.upload(draft.photos)
         let create = ListingEndpoints.CreateBusinessBody(
             name: draft.businessName,
             description: draft.founderStory.isEmpty ? draft.whyItMatters : draft.founderStory,
@@ -85,7 +84,6 @@ final class LiveListingRepository: ListingRepository, @unchecked Sendable {
             )
             _ = try await client.send(try SaleEndpoints.submitSale(businessId: business.id, body: saleBody))
         }
-        // TODO(API): photo upload once the backend defines it.
         return business.id
     }
 

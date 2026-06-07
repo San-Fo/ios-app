@@ -66,10 +66,11 @@ final class AppEnvironment {
             let box = currentUserIdBox
             let userId: () -> String? = { box.value }
             authService = LiveAuthService(client: client, tokenStore: tokenStore)
-            businessRepository = LiveBusinessRepository(client: client)
+            let imageUploader = LiveImageUploader(client: client)
+            businessRepository = LiveBusinessRepository(client: client, imageUploader: imageUploader)
             profileRepository = LiveProfileRepository(client: client)
             takeoverRepository = LiveTakeoverRepository(client: client, currentUserId: userId)
-            listingRepository = LiveListingRepository(client: client)
+            listingRepository = LiveListingRepository(client: client, imageUploader: imageUploader)
             saleRepository = LiveSaleRepository(client: client, currentUserId: userId)
             dealChatRepository = LiveDealChatRepository(client: client, currentUserId: userId)
             verificationRepository = LiveVerificationRepository(client: client)

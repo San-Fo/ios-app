@@ -29,9 +29,11 @@ protocol BusinessRepository: Sendable {
 /// the DTOs to domain models here once the backend is ready.
 final class LiveBusinessRepository: BusinessRepository, @unchecked Sendable {
     private let client: APIClient
+    private let imageUploader: ImageUploader
 
-    init(client: APIClient) {
+    init(client: APIClient, imageUploader: ImageUploader) {
         self.client = client
+        self.imageUploader = imageUploader
     }
 
     func recommended(for profile: UserProfile?) async throws -> [Business] {
@@ -67,12 +69,7 @@ final class LiveBusinessRepository: BusinessRepository, @unchecked Sendable {
     }
 
     func uploadPhoto(_ jpeg: Data) async throws -> String {
-        // NO_BACKEND: there is no image-upload endpoint, so we can't host the
-        // file. Embed it as a data URL — the backend accepts arbitrary strings
-        // in galleryImageUrls and the client can render it.
-        // TODO(API): replace with a real upload (multipart or pre-signed URL).
-        MockMarker.hit(.noBackend, "Live.uploadPhoto", "no upload endpoint; using data URL")
-        return "data:image/jpeg;base64,\(jpeg.base64EncodedString())"
+        try await imageUploader.upload(jpeg)
     }
 }
 
