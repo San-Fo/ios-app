@@ -76,17 +76,17 @@ The app has UI/flows ready and waiting on these. Ordered by priority.
 | 1 | **Image upload** | multipart or pre-signed URL upload returning a hosted URL | Wired behind `ImageUploader` seam (`LiveImageUploader.upload`); currently emits base64 `data:` URLs. One-file swap. Used by business gallery + listing photos. |
 | 2 | **Apple Sign-In verification** | `POST /auth/apple` must verify the Apple identity token server-side | Fully wired (`LiveAuthService.signInWithApple` sends the real token). |
 
-### High — tappable controls that silently fake success today
-| # | Gap | Endpoint needed | App side |
-|---|---|---|---|
-| 3 | **Community memories** | `POST /businesses/{id}/memories` | `Live.addMemory` echoes locally (`NO_BACKEND`); memory vanishes after the session. |
-| 4 | **Ask a question / contact owner** | submit a question/message to the business team | `AskQuestionView` "Send question" has **no handler** — shows a fake "sent" and discards the text. |
+### ✅ DONE — now wired to real endpoints
+| # | Feature | Status |
+|---|---|---|
+| 3 | **Community memories** | ✅ LIVE. `LiveBusinessRepository.addMemory` → `POST /businesses/{id}/memories` (`{body}`, author server-set). Memories decoded from `BusinessDTO.memories` and shown on detail; `commentCount` in stats. |
+| 4 | **Ask a question** | ✅ LIVE. `AskQuestionView` → `POST /businesses/{id}/questions` (`{question}`). Public Q&A; owner answers via `.../questions/{id}/answer`. |
 
 ### Medium — partly built, workaround in place
 | # | Gap | Endpoint needed | App side |
 |---|---|---|---|
 | 5 | **Deal status lifecycle** | mark payment pending / completed / cancel | Deal-chat menu offers all three; `Live.dealUpdateStatus` is a silent no-op (re-fetches). |
-| 6 | **Founder Q&A** | ask/answer a founder question | `Live.askFounder` is a local echo **and has no UI caller**; section only displays existing Q&A. |
+| 6 | **Founder Q&A (takeover)** | ask/answer a founder question on a takeover | `Live.askFounder` is a local echo **and has no UI caller**. (Distinct from the business Q&A in #4, which is live.) |
 | 7 | **Richer search filters** | `GET /businesses/search` should honor `district`, funding/availability, and **multiple** categories (today: only `q` + one `category`) | Filters applied client-side in `BusinessQuery.matches` as a workaround — only filters the returned page, not ideal for pagination. |
 
 ### Low / product decision

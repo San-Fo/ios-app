@@ -62,6 +62,10 @@ final class FallbackBusinessRepository: BusinessRepository, @unchecked Sendable 
         try await live.addMemory(businessId: businessId, author: author, text: text)
     }
 
+    func askQuestion(businessId: String, question: String) async throws {
+        try await live.askQuestion(businessId: businessId, question: question)
+    }
+
     func uploadPhoto(_ jpeg: Data) async throws -> String {
         try await live.uploadPhoto(jpeg)
     }

@@ -88,7 +88,7 @@ struct BusinessDetailView: View {
             InvestFlowView(detail: detail)
         }
         .sheet(isPresented: $showAskQuestion) {
-            AskQuestionView(businessName: detail.summary.name)
+            AskQuestionView(businessId: detail.id, businessName: detail.summary.name)
         }
         .sheet(isPresented: $showProfessionalBid) {
             if let sale = detail.professionalSale {

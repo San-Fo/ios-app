@@ -68,3 +68,12 @@ Derived/
 
 ### Tuist managed dependencies ###
 Tuist/.build
+
+### Python (seeding scripts) ###
+__pycache__/
+*.pyc
+.venv/
+
+### Seeding assets (large scraped photos, not part of the app) ###
+photos/
+scripts/photos/

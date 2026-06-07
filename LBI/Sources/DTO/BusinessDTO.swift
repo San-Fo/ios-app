@@ -23,6 +23,7 @@ struct BusinessDTO: Decodable {
     let galleryImageUrls: [String]?
     let owner: OwnerSummaryDTO?
     let listingStatistics: ListingStatisticsDTO?
+    let memories: [MemoryDTO]?
     let createdAt: BSONDate?
 
     /// Accept `id` or `_id` for the primary key (the backend uses both across
@@ -31,7 +32,7 @@ struct BusinessDTO: Decodable {
         case id, _id = "_id"
         case ownerUserId, name, description, foundingYear, categories, district
         case location, financialIntent, verificationStatus, sale
-        case galleryImageUrls, owner, listingStatistics, createdAt
+        case galleryImageUrls, owner, listingStatistics, memories, createdAt
     }
 
     init(from decoder: Decoder) throws {
@@ -51,6 +52,7 @@ struct BusinessDTO: Decodable {
         galleryImageUrls = try c.decodeIfPresent([String].self, forKey: .galleryImageUrls)
         owner = try c.decodeIfPresent(OwnerSummaryDTO.self, forKey: .owner)
         listingStatistics = try c.decodeIfPresent(ListingStatisticsDTO.self, forKey: .listingStatistics)
+        memories = try c.decodeIfPresent([MemoryDTO].self, forKey: .memories)
         createdAt = try c.decodeIfPresent(BSONDate.self, forKey: .createdAt)
     }
 
@@ -120,11 +122,13 @@ struct BusinessDTO: Decodable {
         )
     }
 
-    /// The full detail model. Editorial content is derived (see type doc).
+    /// The full detail model. Editorial content is derived (see type doc);
+    /// community memories are real backend data.
     func toDetail() -> BusinessDetail {
-        // DERIVED: the backend has no authored story/memories/rewards; these are
+        // DERIVED: the backend has no authored story/rewards; these are
         // synthesized from `description`/`owner`. Expected on the real path too.
-        MockMarker.hit(.derived, "BusinessDTO.toDetail.editorial", "founderStory/whyItMatters/memories/rewards derived")
+        // (Community memories below are real, not derived.)
+        MockMarker.hit(.derived, "BusinessDTO.toDetail.editorial", "founderStory/whyItMatters/rewards derived")
         return BusinessDetail(
             id: id,
             summary: toSummary(),
@@ -132,7 +136,7 @@ struct BusinessDTO: Decodable {
             founderName: owner?.name ?? "",
             founderStory: owner?.biography ?? description,
             whyItMatters: description,
-            communityMemories: [],
+            communityMemories: (memories ?? []).map { $0.toDomain() },
             snapshot: BusinessSnapshot(
                 foundedYear: foundingYear ?? 0,
                 employees: sale?.financials?.staffCount ?? 0,
@@ -164,6 +168,30 @@ struct OwnerSummaryDTO: Decodable {
 struct ListingStatisticsDTO: Decodable {
     let viewCount: Int?
     let likeCount: Int?
+    let commentCount: Int?
+}
+
+/// A community memory embedded in the business document. The backend sets the
+/// author from the session token; the text field is `body`.
+struct MemoryDTO: Decodable {
+    let id: String
+    let authorUserId: String?
+    let authorName: String?
+    let body: String
+    let createdAt: BSONDate?
+
+    func toDomain() -> CommunityMemory {
+        let name = authorName ?? "Neighbour"
+        let years: Int? = createdAt.map { date in
+            max(0, Calendar.current.dateComponents([.year], from: date.date, to: Date()).year ?? 0)
+        }
+        return CommunityMemory(
+            id: id,
+            author: name,
+            text: body,
+            yearsAgo: years
+        )
+    }
 }
 
 /// `location` on a business: human address + GeoJSON point.

@@ -33,6 +33,8 @@ protocol BusinessRepository: Sendable {
     func updateBusiness(id: String, description: String) async throws -> BusinessDetail
     /// A normal user adds a community memory under a business page.
     func addMemory(businessId: String, author: String, text: String) async throws -> CommunityMemory
+    /// Posts a public question to the business owner.
+    func askQuestion(businessId: String, question: String) async throws
     /// Uploads a listing photo and returns its hosted URL.
     func uploadPhoto(_ jpeg: Data) async throws -> String
 }
@@ -80,10 +82,19 @@ final class LiveBusinessRepository: BusinessRepository, @unchecked Sendable {
     }
 
     func addMemory(businessId: String, author: String, text: String) async throws -> CommunityMemory {
-        // NO_BACKEND: there is no community-memory endpoint yet; echo locally so
-        // the UI flows. TODO(API): add POST /businesses/{id}/memories.
-        MockMarker.hit(.noBackend, "Live.addMemory", "no memories endpoint")
+        // The author is set server-side from the session token; `author` is
+        // ignored here. The endpoint returns the full updated business, so we
+        // pull the matching new memory back out (falling back to a local model
+        // if the server shape ever changes).
+        let dto = try await client.send(try BusinessEndpoints.addMemory(id: businessId, body: text))
+        if let created = dto.memories?.last(where: { $0.body == text }) ?? dto.memories?.last {
+            return created.toDomain()
+        }
         return CommunityMemory(id: UUID().uuidString, author: author, text: text)
+    }
+
+    func askQuestion(businessId: String, question: String) async throws {
+        _ = try await client.send(try BusinessEndpoints.askQuestion(id: businessId, question: question))
     }
 
     func uploadPhoto(_ jpeg: Data) async throws -> String {
@@ -143,6 +154,10 @@ final class MockBusinessRepository: BusinessRepository, @unchecked Sendable {
     func addMemory(businessId: String, author: String, text: String) async throws -> CommunityMemory {
         MockMarker.hit(.mock, "MockBusinessRepository.addMemory")
         return CommunityMemory(id: UUID().uuidString, author: author, text: text)
+    }
+
+    func askQuestion(businessId: String, question: String) async throws {
+        MockMarker.hit(.mock, "MockBusinessRepository.askQuestion")
     }
 
     func uploadPhoto(_ jpeg: Data) async throws -> String {

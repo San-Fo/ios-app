@@ -770,5 +770,7 @@ private final class StubBusinessRepository: BusinessRepository, @unchecked Senda
         CommunityMemory(id: "m", author: author, text: text)
     }
 
+    func askQuestion(businessId: String, question: String) async throws {}
+
     func uploadPhoto(_ jpeg: Data) async throws -> String { "stub://photo" }
 }

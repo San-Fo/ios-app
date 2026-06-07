@@ -53,7 +53,33 @@ enum BusinessEndpoints {
         Endpoint(path: "businesses/\(id)/like", method: .post)
     }
 
+    /// Posts a community memory under a business. The backend derives the author
+    /// from the session token (the client never sends it) and returns the full
+    /// updated business (with the new entry in `memories`).
+    static func addMemory(id: String, body: String) throws -> Endpoint<BusinessDTO> {
+        try .json(path: "businesses/\(id)/memories", method: .post, body: MemoryBody(body: body))
+    }
+
+    /// Deletes a community memory (allowed for the author or the business owner).
+    static func deleteMemory(id: String, memoryId: String) -> Endpoint<EmptyResponse> {
+        Endpoint(path: "businesses/\(id)/memories/\(memoryId)", method: .delete)
+    }
+
+    /// Posts a public question to the business owner. Returns the updated
+    /// business (with the new entry in `questions`).
+    static func askQuestion(id: String, question: String) throws -> Endpoint<BusinessDTO> {
+        try .json(path: "businesses/\(id)/questions", method: .post, body: QuestionBody(question: question))
+    }
+
     private struct UpdateBody: Encodable {
         let description: String
+    }
+
+    private struct MemoryBody: Encodable {
+        let body: String
+    }
+
+    private struct QuestionBody: Encodable {
+        let question: String
     }
 }
