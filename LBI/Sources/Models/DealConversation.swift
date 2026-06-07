@@ -49,13 +49,11 @@ struct DealConversation: Identifiable, Equatable, Hashable {
 /// How an accepted deal originated.
 enum DealKind: String, Codable, Hashable {
     case commercialBid
-    case soloBuyer
     case groupTakeover
 
     var displayName: String {
         switch self {
         case .commercialBid: return "Commercial acquisition"
-        case .soloBuyer: return "Retail buyer"
         case .groupTakeover: return "Group takeover"
         }
     }
@@ -63,7 +61,6 @@ enum DealKind: String, Codable, Hashable {
     var icon: String {
         switch self {
         case .commercialBid: return "briefcase.fill"
-        case .soloBuyer: return "person.fill"
         case .groupTakeover: return "person.3.fill"
         }
     }

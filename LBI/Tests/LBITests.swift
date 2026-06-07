@@ -562,6 +562,42 @@ struct LBITests {
 
     // MARK: Fallback discovery
 
+    // MARK: Search filter predicate
+
+    @Test func queryMatchesHonoursDistrictAndFunding() throws {
+        // A business must satisfy every selected filter dimension; empty
+        // dimensions match everything.
+        let biz = try #require(SampleData.summaries.first)
+
+        var q = BusinessQuery()
+        #expect(q.matches(biz)) // no filters → matches
+
+        q.districts = [biz.district]
+        #expect(q.matches(biz))
+        q.districts = [District.allCases.first { $0 != biz.district }!]
+        #expect(!q.matches(biz)) // wrong district excluded
+
+        q = BusinessQuery()
+        q.fundingKinds = biz.fundingOptions
+        #expect(q.matches(biz))
+        let missing = Set(FundingKind.allCases).subtracting(biz.fundingOptions)
+        if let absent = missing.first {
+            q.fundingKinds = [absent]
+            #expect(!q.matches(biz)) // unavailable funding route excluded
+        }
+    }
+
+    @Test func queryMatchesRequiresAllSelectedCategories() throws {
+        // Multi-category selection is applied client-side (backend only filters
+        // by one), so a business must be in one of the selected categories.
+        let biz = try #require(SampleData.summaries.first)
+        var q = BusinessQuery()
+        q.categories = [biz.category]
+        #expect(q.matches(biz))
+        q.categories = [BusinessCategory.allCases.first { $0 != biz.category }!]
+        #expect(!q.matches(biz))
+    }
+
     @Test func fallbackUsesLiveWhenLiveSucceeds() async throws {
         let liveBusiness = try #require(SampleData.summaries.first)
         let live = StubBusinessRepository()

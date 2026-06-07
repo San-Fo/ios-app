@@ -125,16 +125,18 @@ struct ListingFlowView: View {
                     .buttonStyle(.plain)
                 }
 
-                if draft.desiredOutcomes.contains(.sellWhole) {
+                if !draft.desiredOutcomes.isDisjoint(with: ListingOutcome.ownershipOutcomes) {
                     VStack(spacing: Theme.Spacing.md) {
                         LabeledField(title: "Commercial guide price (HK$)", text: $draft.saleAskingPrice, placeholder: "2200000", keyboard: .numberPad)
-                        LabeledField(title: "Retail fallback price (HK$)", text: $draft.retailFallbackPrice, placeholder: "2500000", keyboard: .numberPad)
-                        Toggle("Allow retail outright purchase", isOn: $draft.allowRetailOutrightPurchase)
-                            .font(.lbiBody)
-                            .tint(Theme.Palette.red)
-                        Toggle("Allow group takeover fallback", isOn: $draft.allowRetailGroupTakeover)
-                            .font(.lbiBody)
-                            .tint(Theme.Palette.red)
+                        if draft.desiredOutcomes.contains(.sellWhole) {
+                            LabeledField(title: "Retail fallback price (HK$)", text: $draft.retailFallbackPrice, placeholder: "2500000", keyboard: .numberPad)
+                            Toggle("Allow retail outright purchase", isOn: $draft.allowRetailOutrightPurchase)
+                                .font(.lbiBody)
+                                .tint(Theme.Palette.red)
+                            Toggle("Allow group takeover fallback", isOn: $draft.allowRetailGroupTakeover)
+                                .font(.lbiBody)
+                                .tint(Theme.Palette.red)
+                        }
                     }
                     .padding(Theme.Spacing.md)
                     .background(Theme.Palette.paperDeep)

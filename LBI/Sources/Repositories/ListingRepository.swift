@@ -64,8 +64,11 @@ final class LiveListingRepository: ListingRepository, @unchecked Sendable {
         )
         let business = try await client.send(try ListingEndpoints.createBusiness(create))
 
-        // Step 2: if the owner is selling the whole business, submit the sale.
-        if draft.desiredOutcomes.contains(.sellWhole), let askingPrice = Decimal(string: draft.saleAskingPrice) {
+        // Step 2: if the owner is transferring ownership (sell whole/partial or
+        // find a successor) and gave a guide price, submit the professional sale
+        // so the bidding/fallback flow materialises for the listing.
+        if !draft.desiredOutcomes.isDisjoint(with: ListingOutcome.ownershipOutcomes),
+           let askingPrice = Decimal(string: draft.saleAskingPrice) {
             let financials = SaleEndpoints.SubmitSaleBody.FinancialsBody(
                 annualRevenue: (Decimal(string: draft.monthlyRevenue) ?? 0) * 12,
                 annualProfit: 0,
@@ -95,7 +98,10 @@ final class LiveListingRepository: ListingRepository, @unchecked Sendable {
         case .revenueShare:
             body = .revenueShareLoan(amount: amount)
         case .partialOwnership, .takeoverGroup:
-            // Map remaining kinds to a donation-style contribution.
+            // The backend has no equity/takeover action, so a community
+            // contribution is recorded as a donation. `ActionDTO.toDomain`
+            // maps the donation response back to `.partialOwnership` so the
+            // displayed kind round-trips consistently.
             body = .donation(amount: amount, tier: nil)
         }
         let dto = try await client.send(try ListingEndpoints.action(businessId: businessId, body: body))
@@ -103,8 +109,14 @@ final class LiveListingRepository: ListingRepository, @unchecked Sendable {
     }
 
     /// Derives the backend business financial intent from the draft's outcomes.
+    ///
+    /// The backend supports three intents (`sale`, `donation`, `revenueShareLoan`)
+    /// and a business carries one. With multi-select outcomes we apply a clear
+    /// precedence so every selectable outcome maps to a faithful intent:
+    /// ownership transfer (sell whole/partial, find successor) → sale;
+    /// revenue-share financing → loan; raise capital → community donation.
     private static func financialIntent(for draft: ListingDraft) -> ListingEndpoints.BusinessFinancialIntentBody {
-        if draft.desiredOutcomes.contains(.sellWhole) || draft.desiredOutcomes.contains(.sellPartial) {
+        if !draft.desiredOutcomes.isDisjoint(with: ListingOutcome.ownershipOutcomes) {
             return .sale(targetAmount: Decimal(string: draft.saleAskingPrice) ?? 0)
         }
         if draft.desiredOutcomes.contains(.revenueShare) {
@@ -114,7 +126,19 @@ final class LiveListingRepository: ListingRepository, @unchecked Sendable {
                 totalRevenueCutPercentage: 0
             )
         }
+        if draft.desiredOutcomes.contains(.raiseCapital) {
+            // A community capital raise is recorded as a donation campaign.
+            return .donation(tiers: Self.donationTiers(for: draft))
+        }
+        // No outcome selected: default to a sale with no guide price.
         return .sale(targetAmount: Decimal(string: draft.saleAskingPrice) ?? 0)
+    }
+
+    /// Maps the owner's supporter reward tiers to backend donation tiers.
+    private static func donationTiers(for draft: ListingDraft) -> [ListingEndpoints.DonationTierBody] {
+        draft.shareRewards.map {
+            ListingEndpoints.DonationTierBody(name: $0.title, minAmount: 0)
+        }
     }
 }
 

@@ -29,11 +29,6 @@ final class ProfileStore {
     /// Whether the user owns at least one business (i.e. acts as an owner).
     var ownsBusiness: Bool { !myBusinesses.isEmpty }
 
-    /// Whether the user owns at least one *verified* (published) business.
-    var ownsVerifiedBusiness: Bool {
-        myBusinesses.contains { $0.status != .raising || true } && ownsBusiness
-    }
-
     /// When true, a demo-owned business is injected so reviewers can preview the
     /// owner experience (extra "My Business" tab, owner-gated detail UI) without
     /// listing a real business. Dev/demo tool only.

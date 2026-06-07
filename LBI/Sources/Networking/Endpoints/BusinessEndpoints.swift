@@ -22,7 +22,9 @@ enum BusinessEndpoints {
         if !query.text.isEmpty {
             items.append(URLQueryItem(name: "q", value: query.text))
         }
-        // The backend accepts a single category filter; send the first selected.
+        // The backend accepts only a single category filter, so send the first
+        // selected to narrow server-side; any additional categories, districts
+        // and funding routes are applied client-side in the repository.
         if let category = query.categories.first {
             items.append(URLQueryItem(name: "category", value: category.serverValue))
         }

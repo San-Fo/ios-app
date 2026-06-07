@@ -244,6 +244,10 @@ enum ListingOutcome: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
+    /// Outcomes that transfer ownership and therefore map to a `sale` intent
+    /// (and collect a guide price). Used by both the listing UI and submission.
+    static let ownershipOutcomes: Set<ListingOutcome> = [.sellWhole, .sellPartial, .findSuccessor]
+
     var displayName: String {
         switch self {
         case .raiseCapital: return "Raise capital"

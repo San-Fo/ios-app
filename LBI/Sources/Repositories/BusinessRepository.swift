@@ -6,6 +6,20 @@ struct BusinessQuery: Equatable {
     var categories: Set<BusinessCategory> = []
     var districts: Set<District> = []
     var fundingKinds: Set<FundingKind> = []
+
+    /// Whether a business satisfies every selected filter dimension. Empty
+    /// dimensions match everything. Used to honour filters the backend search
+    /// endpoint ignores (districts, funding routes, multiple categories).
+    func matches(_ business: Business) -> Bool {
+        let matchesText = text.isEmpty
+            || business.name.localizedCaseInsensitiveContains(text)
+            || business.storyHeadline.localizedCaseInsensitiveContains(text)
+        let matchesCategory = categories.isEmpty || categories.contains(business.category)
+        let matchesDistrict = districts.isEmpty || districts.contains(business.district)
+        let matchesFunding = fundingKinds.isEmpty
+            || !business.fundingOptions.isDisjoint(with: fundingKinds)
+        return matchesText && matchesCategory && matchesDistrict && matchesFunding
+    }
 }
 
 /// Provides business discovery, search and detail.
@@ -43,7 +57,11 @@ final class LiveBusinessRepository: BusinessRepository, @unchecked Sendable {
 
     func list(query: BusinessQuery) async throws -> [Business] {
         let dtos = try await client.send(BusinessEndpoints.search(query: query))
-        return dtos.map { $0.toSummary() }
+        // The backend search only honours `q` and a single `category`, so apply
+        // the remaining selected filters (extra categories, districts, funding
+        // routes) client-side — otherwise those chips would change the UI badge
+        // but not the results.
+        return dtos.map { $0.toSummary() }.filter { query.matches($0) }
     }
 
     func detail(id: String) async throws -> BusinessDetail {
@@ -100,16 +118,7 @@ final class MockBusinessRepository: BusinessRepository, @unchecked Sendable {
 
     func list(query: BusinessQuery) async throws -> [Business] {
         MockMarker.hit(.mock, "MockBusinessRepository.list")
-        return SampleData.summaries.filter { business in
-            let matchesText = query.text.isEmpty
-                || business.name.localizedCaseInsensitiveContains(query.text)
-                || business.storyHeadline.localizedCaseInsensitiveContains(query.text)
-            let matchesCategory = query.categories.isEmpty || query.categories.contains(business.category)
-            let matchesDistrict = query.districts.isEmpty || query.districts.contains(business.district)
-            let matchesFunding = query.fundingKinds.isEmpty
-                || !business.fundingOptions.isDisjoint(with: query.fundingKinds)
-            return matchesText && matchesCategory && matchesDistrict && matchesFunding
-        }
+        return SampleData.summaries.filter { query.matches($0) }
     }
 
     func detail(id: String) async throws -> BusinessDetail {

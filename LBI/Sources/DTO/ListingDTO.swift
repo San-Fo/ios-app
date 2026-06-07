@@ -60,7 +60,10 @@ struct ActionDTO: Decodable {
             fundingKind = .fullAcquisition
             amount = 0
         case let .donation(donationAmount, _):
-            fundingKind = .fullAcquisition
+            // Donations back the community "partial ownership" contribution
+            // (the backend has no distinct equity action), so round-trip the
+            // selected kind consistently rather than mislabelling it.
+            fundingKind = .partialOwnership
             amount = donationAmount
         case let .revenueShareLoan(loanAmount):
             fundingKind = .revenueShare
