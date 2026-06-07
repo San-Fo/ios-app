@@ -114,6 +114,16 @@ records, but the content is synthetic:
   declined commercial bids → opened to the public + a real takeover group with
   members). Same synthetic-provenance caveats apply (dev owners/investors/fans,
   fabricated figures, stock photos).
+- **`scripts/seed_options.py`** — 11 businesses covering **every finance/selling
+  option at varying partial-completion levels**, prefixed `[scenario]` in their
+  names: sale fresh (0 bids) / bidding (~80%) / hot (~98%) / accepted (deal
+  opened); revenue-share loan ~20% / ~65% funded (investor actions); donation
+  ~15% / ~90% funded (supporter actions); retail outright-purchase; group
+  takeover forming (3 members) / near-complete (7 members). "Progress" reflects
+  what the server actually stores — sale lifecycle stage, bids, contribution
+  actions, and takeover group membership. (Note: the backend does not aggregate
+  a `fundingRaised` total on the business; donation/loan progress is the sum of
+  individual `action` records, which the client/UI can total.)
 
 What this means honestly:
 - The **owners, bidders, likers, commenters and askers are dev/seed accounts**,
