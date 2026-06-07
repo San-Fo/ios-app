@@ -24,7 +24,7 @@ struct SignInView: View {
                         )
                         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
 
-                    Text("Huo Ju")
+                    Text("San Fo")
                         .font(.lbiHero)
                         .multilineTextAlignment(.center)
                         .inkStyle()

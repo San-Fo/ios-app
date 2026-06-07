@@ -126,9 +126,13 @@ struct VerificationFlowView: View {
     private func resultView(_ status: VerificationStatus) -> some View {
         VStack(spacing: Theme.Spacing.md) {
             Spacer()
-            Image(systemName: status.isApproved ? "checkmark.seal.fill" : "clock.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(status.isApproved ? Theme.Palette.jade : Theme.Palette.gold)
+            if status.isApproved {
+                SuccessCheckmark(tint: Theme.Palette.jade)
+            } else {
+                Image(systemName: "clock.fill")
+                    .font(.system(size: 64))
+                    .foregroundStyle(Theme.Palette.gold)
+            }
             Text(status.isApproved ? "You're verified" : "Submitted for review")
                 .font(.lbiTitle).inkStyle()
             Text(status.isApproved

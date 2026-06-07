@@ -117,9 +117,7 @@ struct BusinessVerificationView: View {
     private var resultView: some View {
         VStack(spacing: Theme.Spacing.md) {
             Spacer()
-            Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(Theme.Palette.jade)
+            SuccessCheckmark(tint: Theme.Palette.jade)
             Text("Business verified").font(.lbiTitle).inkStyle()
             Text("\(businessName) is now verified and published. You're a verified business owner.")
                 .font(.lbiBody).inkSecondaryStyle()

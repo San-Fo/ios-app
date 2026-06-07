@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// App entry point for Huo Ju (project/target name remains "LBI").
+/// App entry point for San Fo (project/target name remains "LBI").
 ///
 /// Owns the two long-lived objects and injects them into the SwiftUI
 /// environment so every screen can reach them:

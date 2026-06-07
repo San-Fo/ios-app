@@ -10,7 +10,7 @@ let project = Project(
             bundleId: "dev.tuist.LBI",
             infoPlist: .extendingDefault(
                 with: [
-                    "CFBundleDisplayName": "Huo Ju",
+                    "CFBundleDisplayName": "San Fo",
                     "UILaunchScreen": [
                         "UIColorName": "",
                         "UIImageName": "",
