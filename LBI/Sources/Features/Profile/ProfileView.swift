@@ -7,6 +7,10 @@ struct ProfileView: View {
     @Environment(AppEnvironment.self) private var environment
 
     @State private var activeVerification: VerificationKind?
+    /// Live account-summary data (sales pipeline + loan deals), loaded from the
+    /// repositories so the investor/owner stat cards reflect real backend data.
+    @State private var sales: [ProfessionalSale] = []
+    @State private var loanDealCount = 0
 
     var body: some View {
         NavigationStack {
@@ -40,7 +44,19 @@ struct ProfileView: View {
             .sheet(item: $activeVerification) { kind in
                 VerificationFlowView(kind: kind) { _ in }
             }
+            .task { await loadAccountSummary() }
         }
+    }
+
+    /// Loads the sales pipeline and loan-deal count for the investor/owner
+    /// account stat cards. Only needed for those roles.
+    private func loadAccountSummary() async {
+        guard let role = profileStore.profile?.role, role != .retail else { return }
+        sales = (try? await environment.saleRepository.sales()) ?? []
+        let businesses = (try? await environment.businessRepository.list(query: BusinessQuery())) ?? []
+        // A loan deal is a business whose financial intent is revenue-share.
+        // The summary already encodes this via its funding options.
+        loanDealCount = businesses.filter { $0.fundingOptions.contains(.revenueShare) }.count
     }
 
     private var profileHeader: some View {
@@ -197,12 +213,10 @@ struct ProfileView: View {
     private var commercialAccountSection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
             SectionHeader(title: "Commercial investor account", subtitle: "Approved buyer tools and private market access")
-            let sales = SampleData.professionalSales
-            let revenueDeals = SampleData.businesses.filter { $0.revenueShareTerms != nil }
             CardContainer {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: Theme.Spacing.sm) {
                     StatPill(label: "Private sales", value: "\(sales.count)", icon: "briefcase.fill")
-                    StatPill(label: "Loan deals", value: "\(revenueDeals.count)", icon: "percent")
+                    StatPill(label: "Loan deals", value: "\(loanDealCount)", icon: "percent")
                     StatPill(label: "Highest ask", value: Money.hkd(sales.map(\.askingPrice).max() ?? 0, abbreviated: true), icon: "tag.fill")
                     StatPill(label: "Open bids", value: "\(sales.flatMap(\.bids).filter { $0.status == .submitted }.count)", icon: "hammer.fill")
                 }
@@ -213,7 +227,6 @@ struct ProfileView: View {
     private var ownerAccountSection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
             SectionHeader(title: "Owner account", subtitle: "Listing submissions and sale decisions")
-            let sales = SampleData.professionalSales
             CardContainer {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: Theme.Spacing.sm) {
                     StatPill(label: "Submitted", value: "\(sales.count)", icon: "storefront.fill")

@@ -136,6 +136,31 @@ enum District: String, CaseIterable, Identifiable, Codable {
         case .tuenMun: return "Tuen Mun"
         }
     }
+
+    /// Approximate centroid (lat/lng) used as a default business location when
+    /// the owner doesn't drop a precise pin. Backend requires coordinates.
+    var centroid: (latitude: Double, longitude: Double) {
+        switch self {
+        case .central: return (22.2820, 114.1588)
+        case .centralWestern: return (22.2870, 114.1500)
+        case .wanChai: return (22.2775, 114.1730)
+        case .causewayBay: return (22.2800, 114.1850)
+        case .eastern: return (22.2830, 114.2220)
+        case .shamShuiPo: return (22.3303, 114.1622)
+        case .mongKok: return (22.3193, 114.1694)
+        case .yauMaTei: return (22.3130, 114.1700)
+        case .yauTsimMong: return (22.3160, 114.1700)
+        case .tsimShaTsui: return (22.2980, 114.1722)
+        case .kowloonCity: return (22.3300, 114.1890)
+        case .kwunTong: return (22.3120, 114.2260)
+        case .shauKeiWan: return (22.2790, 114.2290)
+        case .tinHau: return (22.2820, 114.1920)
+        case .saiYingPun: return (22.2856, 114.1430)
+        case .taiPo: return (22.4500, 114.1700)
+        case .shaTin: return (22.3820, 114.1880)
+        case .tuenMun: return (22.3910, 113.9770)
+        }
+    }
 }
 
 /// What a user wants to do on the platform.

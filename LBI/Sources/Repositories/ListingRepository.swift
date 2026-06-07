@@ -5,6 +5,7 @@ struct ListingDraft: Equatable {
     var businessName: String = ""
     var category: BusinessCategory = .restaurant
     var district: District = .central
+    var address: String = ""
     var foundedYear: String = ""
     var founderStory: String = ""
     var whyItMatters: String = ""
@@ -37,15 +38,19 @@ final class LiveListingRepository: ListingRepository, @unchecked Sendable {
 
     func submitListing(_ draft: ListingDraft) async throws -> String {
         // Step 1: create the business listing (created `pending`).
+        // The backend requires foundingYear, address, latitude and longitude,
+        // so supply safe defaults when the owner leaves optional fields blank.
+        let currentYear = Calendar.current.component(.year, from: Date())
+        let coordinate = draft.district.centroid
         let create = ListingEndpoints.CreateBusinessBody(
             name: draft.businessName,
             description: draft.founderStory.isEmpty ? draft.whyItMatters : draft.founderStory,
-            foundingYear: Int(draft.foundedYear),
+            foundingYear: Int(draft.foundedYear) ?? currentYear,
             categories: [draft.category.serverValue],
             district: draft.district.rawValue,
-            address: nil,
-            latitude: nil,
-            longitude: nil,
+            address: draft.address.isEmpty ? draft.district.displayName : draft.address,
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
             financialIntent: Self.financialIntent(for: draft)
         )
         let business = try await client.send(try ListingEndpoints.createBusiness(create))

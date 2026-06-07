@@ -63,28 +63,31 @@ enum ListingEndpoints {
     }
 
     /// Externally-tagged action kind for `POST /businesses/{id}/actions`.
+    /// The action **request** body is internally tagged with a `kind` field
+    /// (verified against the live server): `{"kind":"purchase"}`,
+    /// `{"kind":"donation","amount":..,"tier":..}`,
+    /// `{"kind":"revenueShareLoan","amount":..}`. (Note: the action *response*
+    /// serializes `kind` differently — see `ActionDTO`.)
     enum ActionBody: Encodable {
         case purchase
         case donation(amount: Decimal, tier: String?)
         case revenueShareLoan(amount: Decimal)
 
         func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
             switch self {
             case .purchase:
-                // Unit-variant: a bare string "purchase".
-                var single = encoder.singleValueContainer()
-                try single.encode("purchase")
+                try c.encode("purchase", forKey: .kind)
             case let .donation(amount, tier):
-                var c = encoder.container(keyedBy: CodingKeys.self)
-                try c.encode(DonationPayload(amount: amount, tier: tier), forKey: .donation)
+                try c.encode("donation", forKey: .kind)
+                try c.encode(amount, forKey: .amount)
+                try c.encodeIfPresent(tier, forKey: .tier)
             case let .revenueShareLoan(amount):
-                var c = encoder.container(keyedBy: CodingKeys.self)
-                try c.encode(LoanPayload(amount: amount), forKey: .revenueShareLoan)
+                try c.encode("revenueShareLoan", forKey: .kind)
+                try c.encode(amount, forKey: .amount)
             }
         }
 
-        private enum CodingKeys: String, CodingKey { case donation, revenueShareLoan }
-        private struct DonationPayload: Encodable { let amount: Decimal; let tier: String? }
-        private struct LoanPayload: Encodable { let amount: Decimal }
+        private enum CodingKeys: String, CodingKey { case kind, amount, tier }
     }
 }

@@ -616,4 +616,36 @@ struct LBITests {
         #expect(mine.isCurrentUser)
         #expect(mine.text == "Welcome.")
     }
+
+    // MARK: Request-body encoding (validated against the live server)
+
+    private func encodeJSON<T: Encodable>(_ value: T) throws -> [String: Any] {
+        let data = try JSONEncoder.lbiDefault.encode(value)
+        return try JSONSerialization.jsonObject(with: data) as! [String: Any]
+    }
+
+    @Test func actionBodyIsInternallyTaggedWithKind() throws {
+        // The live server expects {"kind":"purchase"} etc., NOT a bare string
+        // or an externally-tagged object. (Verified: bare string -> 422.)
+        let purchase = try encodeJSON(ListingEndpoints.ActionBody.purchase)
+        #expect(purchase["kind"] as? String == "purchase")
+        #expect(purchase.count == 1)
+
+        let donation = try encodeJSON(ListingEndpoints.ActionBody.donation(amount: 100, tier: "Gold"))
+        #expect(donation["kind"] as? String == "donation")
+        #expect((donation["amount"] as? NSNumber)?.intValue == 100)
+        #expect(donation["tier"] as? String == "Gold")
+
+        let loan = try encodeJSON(ListingEndpoints.ActionBody.revenueShareLoan(amount: 5000))
+        #expect(loan["kind"] as? String == "revenueShareLoan")
+        #expect((loan["amount"] as? NSNumber)?.intValue == 5000)
+    }
+
+    @Test func districtCentroidsAreReasonableHKCoordinates() {
+        for district in District.allCases {
+            let c = district.centroid
+            #expect(c.latitude > 22.1 && c.latitude < 22.6)
+            #expect(c.longitude > 113.8 && c.longitude < 114.4)
+        }
+    }
 }

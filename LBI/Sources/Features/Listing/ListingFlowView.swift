@@ -72,6 +72,7 @@ struct ListingFlowView: View {
                 LabeledField(title: "Business name", text: $draft.businessName, placeholder: "e.g. Wing Kee Cha Chaan Teng")
                 pickerRow("Category", selection: $draft.category, options: BusinessCategory.allCases) { $0.displayName }
                 pickerRow("District", selection: $draft.district, options: District.allCases) { $0.displayName }
+                LabeledField(title: "Address", text: $draft.address, placeholder: "e.g. 12 Apliu Street")
                 LabeledField(title: "Founded year", text: $draft.foundedYear, placeholder: "1964", keyboard: .numberPad)
                 LabeledField(title: "Contact email", text: $draft.contactEmail, placeholder: "you@example.hk", keyboard: .emailAddress)
             }
