@@ -4,6 +4,7 @@ import SwiftUI
 struct DiscoverView: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(ProfileStore.self) private var profileStore
+    @Environment(AuthState.self) private var auth
 
     @State private var recommended: [Business] = []
     @State private var isLoading = true
@@ -15,7 +16,9 @@ struct DiscoverView: View {
                 LazyVStack(alignment: .leading, spacing: Theme.Spacing.lg) {
                     header
 
-                    if isLoading {
+                    if auth.isOfflineGuest {
+                        offlineGuestBanner
+                    } else if isLoading {
                         loadingState
                     } else if let errorMessage {
                         errorState(errorMessage)
@@ -145,11 +148,32 @@ struct DiscoverView: View {
         }
     }
 
+    /// Shown when the user is browsing as a local-only guest with no backend
+    /// session — authenticated calls (the feed) can't succeed, so prompt a
+    /// real sign-in rather than showing a confusingly empty page.
+    private var offlineGuestBanner: some View {
+        CardContainer {
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                Label("You're browsing offline", systemImage: "wifi.slash")
+                    .font(.lbiHeadline).inkStyle()
+                Text("Sign in to load and support the local shops near you.")
+                    .font(.lbiBody).inkSecondaryStyle()
+                PrimaryButton("Sign in") { Task { await auth.signOut() } }
+            }
+        }
+    }
+
     private func load() async {
+        // A local-only guest has no session; skip the call (the banner handles it).
+        guard !auth.isOfflineGuest else { isLoading = false; return }
         isLoading = true
         errorMessage = nil
         do {
             recommended = try await environment.businessRepository.recommended(for: profileStore.profile)
+        } catch APIError.unauthorized {
+            // The session is no longer valid — auto-recover to the sign-in screen
+            // instead of stranding the user on a dead feed.
+            await auth.signOut()
         } catch let error as APIError {
             errorMessage = error.userMessage
         } catch {
@@ -160,9 +184,11 @@ struct DiscoverView: View {
 }
 
 #Preview {
-    DiscoverView()
-        .environment(AppEnvironment.preview)
+    let env = AppEnvironment.preview
+    return DiscoverView()
+        .environment(env)
         .environment(previewProfileStore())
+        .environment(AuthState(service: env.authService))
 }
 
 @MainActor

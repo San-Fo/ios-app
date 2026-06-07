@@ -737,6 +737,36 @@ struct LBITests {
         let labels = VerificationKind.kyb.requiredDocuments.map(\.label)
         #expect(labels.contains { $0.localizedCaseInsensitiveContains("financial statements") && $0.contains("4") })
     }
+
+    // MARK: Session restore
+
+    @Test func restoreSessionClearsTokenOnUnauthorized() async throws {
+        // A stale/invalid token (401) must be cleared so the user lands back on
+        // the sign-in screen instead of a broken signed-in state.
+        let store = InMemoryTokenStore(token: "stale")
+        let client = StubAPIClient(error: .unauthorized)
+        let service = LiveAuthService(client: client, tokenStore: store)
+        let user = try await service.restoreSession()
+        #expect(user == nil)
+        #expect(store.currentToken() == nil)
+    }
+
+    @Test func restoreSessionKeepsTokenOnTransportError() async throws {
+        // Offline launches must NOT log the user out — keep the token and surface
+        // the error to the caller (bootstrap treats it as signed-out for now).
+        let store = InMemoryTokenStore(token: "good")
+        let client = StubAPIClient(error: .transport("offline"))
+        let service = LiveAuthService(client: client, tokenStore: store)
+        await #expect(throws: APIError.self) { _ = try await service.restoreSession() }
+        #expect(store.currentToken() == "good")
+    }
+
+    @Test func restoreSessionReturnsNilWithoutToken() async throws {
+        let store = InMemoryTokenStore(token: nil)
+        let client = StubAPIClient(error: .unknown)
+        let service = LiveAuthService(client: client, tokenStore: store)
+        #expect(try await service.restoreSession() == nil)
+    }
 }
 
 // MARK: - Test doubles
@@ -773,4 +803,15 @@ private final class StubBusinessRepository: BusinessRepository, @unchecked Senda
     func askQuestion(businessId: String, question: String) async throws {}
 
     func uploadPhoto(_ jpeg: Data) async throws -> String { "stub://photo" }
+}
+
+/// An `APIClient` that always throws a fixed error — used to exercise auth
+/// session-restore error handling without a network.
+private final class StubAPIClient: APIClient, @unchecked Sendable {
+    let error: APIError
+    init(error: APIError) { self.error = error }
+
+    func send<Response: Decodable>(_ endpoint: Endpoint<Response>) async throws -> Response {
+        throw error
+    }
 }

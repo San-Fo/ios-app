@@ -24,6 +24,11 @@ final class AuthState {
     private(set) var isWorking = false
     /// User-facing error message for the last failed sign-in attempt.
     var errorMessage: String?
+    /// True when the user is browsing as a *local-only* guest with no backend
+    /// session (e.g. "Skip for now" while the backend was unreachable). In this
+    /// state authenticated calls (the discovery feed, profile, etc.) cannot
+    /// succeed, so the UI shows an offline banner prompting a real sign-in.
+    private(set) var isOfflineGuest = false
 
     private let service: AuthService
 
@@ -41,6 +46,7 @@ final class AuthState {
     func bootstrap() async {
         do {
             if let user = try await service.restoreSession() {
+                isOfflineGuest = false
                 phase = .signedIn(user)
             } else {
                 phase = .signedOut
@@ -58,6 +64,7 @@ final class AuthState {
         defer { isWorking = false }
         do {
             let user = try await service.signInWithApple(credential)
+            isOfflineGuest = false
             phase = .signedIn(user)
         } catch SignInWithAppleError.cancelled {
             // User cancelled — no error surfaced.
@@ -76,6 +83,7 @@ final class AuthState {
         defer { isWorking = false }
         do {
             let user = try await service.signInDev(subject: subject, investorStatus: investorStatus, name: name)
+            isOfflineGuest = false
             phase = .signedIn(user)
         } catch let error as APIError {
             errorMessage = error.userMessage
@@ -87,6 +95,7 @@ final class AuthState {
     /// Clears the session and returns to the signed-out gate.
     func signOut() async {
         await service.signOut()
+        isOfflineGuest = false
         phase = .signedOut
     }
 
@@ -107,9 +116,13 @@ final class AuthState {
             // everyone sharing the backend's default dev user.
             let subject = AuthState.guestSubject
             let user = try await service.signInDev(subject: subject, investorStatus: nil, name: "Guest")
+            isOfflineGuest = false
             phase = .signedIn(user)
         } catch {
             // No backend session available — continue as a local-only guest.
+            // Authenticated calls will fail, so flag this so the UI can show an
+            // offline banner prompting a real sign-in.
+            isOfflineGuest = true
             phase = .signedIn(AuthenticatedUser(id: "guest-user", displayName: "Guest", email: nil))
         }
     }

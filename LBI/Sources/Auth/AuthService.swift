@@ -67,9 +67,19 @@ final class LiveAuthService: AuthService, @unchecked Sendable {
             // `GET /me` returns the full user profile DTO.
             let dto = try await client.send(ProfileEndpoints.me())
             return AuthenticatedUser(id: dto.id, displayName: dto.displayName, email: dto.email)
-        } catch APIError.unauthorized {
-            tokenStore.clear()
-            return nil
+        } catch let error as APIError {
+            // A stale/invalid token (rejected, forbidden, or a response we can no
+            // longer decode, e.g. after a backend change) must not strand the
+            // user in a signed-in-but-broken state: clear it and fall back to the
+            // sign-in screen. Transport/offline errors are NOT the token's fault,
+            // so keep it and let the caller treat launch as signed-out for now.
+            switch error {
+            case .unauthorized, .forbidden, .decoding, .server, .notFound:
+                tokenStore.clear()
+                return nil
+            case .transport, .invalidRequest, .unknown:
+                throw error
+            }
         }
     }
 

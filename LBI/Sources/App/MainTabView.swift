@@ -66,7 +66,9 @@ struct MainTabView: View {
 }
 
 #Preview {
-    MainTabView()
-        .environment(AppEnvironment.preview)
+    let env = AppEnvironment.preview
+    return MainTabView()
+        .environment(env)
         .environment(ProfileStore(repository: MockProfileRepository(), businessRepository: MockBusinessRepository()))
+        .environment(AuthState(service: env.authService))
 }
