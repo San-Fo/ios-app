@@ -35,7 +35,7 @@ struct BusinessVerificationView: View {
                 }
                 if !verified {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Skip for now") { skip() }
+                        Button("Skip (demo)") { skip() }
                             .foregroundStyle(Theme.Palette.inkSecondary)
                     }
                 }
@@ -68,7 +68,7 @@ struct BusinessVerificationView: View {
                 PrimaryButton("Submit for verification", systemImage: "checkmark.shield.fill", isLoading: isSubmitting, isEnabled: allAttached) {
                     Task { await submit() }
                 }
-                Button("Skip for now") { skip() }
+                Button("Skip verification (demo)") { skip() }
                     .font(.lbiSubtitle)
                     .foregroundStyle(Theme.Palette.inkSecondary)
             }
@@ -149,8 +149,15 @@ struct BusinessVerificationView: View {
     }
 
     private func skip() {
-        onFinish(false)
-        dismiss()
+        // Demo skip: still grant the business verification so the listing can
+        // publish and the flow proceeds, without requiring documents.
+        Task {
+            if let outcome = try? await environment.verificationRepository.verifyBusiness(businessId: businessId) {
+                await profileStore.applyVerificationOutcome(outcome)
+            }
+            onFinish(true)
+            dismiss()
+        }
     }
 }
 

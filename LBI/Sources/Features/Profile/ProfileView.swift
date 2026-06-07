@@ -181,6 +181,13 @@ struct ProfileView: View {
                     }
                 }
             }
+
+            if profile.role == .professional {
+                // Let an investor return to the public supporter experience.
+                SecondaryButton("Switch back to supporter", systemImage: "arrow.uturn.left") {
+                    Task { await profileStore.update { $0.role = .retail } }
+                }
+            }
         }
     }
 

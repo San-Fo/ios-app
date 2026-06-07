@@ -648,4 +648,9 @@ struct LBITests {
             #expect(c.longitude > 113.8 && c.longitude < 114.4)
         }
     }
+
+    @Test func kybRequiresFourYearFinancialStatements() {
+        let labels = VerificationKind.kyb.requiredDocuments.map(\.label)
+        #expect(labels.contains { $0.localizedCaseInsensitiveContains("financial statements") && $0.contains("4") })
+    }
 }

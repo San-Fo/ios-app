@@ -131,6 +131,7 @@ extension VerificationKind {
                 VerificationDocument(label: "Business Registration certificate"),
                 VerificationDocument(label: "Proof of ownership / directorship"),
                 VerificationDocument(label: "Recent business address proof"),
+                VerificationDocument(label: "Financial statements (last 4 years)"),
             ]
         case .proInvestor:
             return [
