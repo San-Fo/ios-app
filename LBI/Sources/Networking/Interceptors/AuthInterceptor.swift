@@ -12,7 +12,7 @@ enum AuthInterceptor {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
 
-    private static let logger = Logger(subsystem: "dev.tuist.LBI", category: "network")
+    private static let logger = Logger(subsystem: "com.san-fo.app", category: "network")
 
     static func logOutgoing(_ request: URLRequest) {
         #if DEBUG

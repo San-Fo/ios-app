@@ -19,6 +19,8 @@ protocol BusinessRepository: Sendable {
     func updateBusiness(id: String, description: String) async throws -> BusinessDetail
     /// A normal user adds a community memory under a business page.
     func addMemory(businessId: String, author: String, text: String) async throws -> CommunityMemory
+    /// Uploads a listing photo and returns its hosted URL.
+    func uploadPhoto(_ jpeg: Data) async throws -> String
 }
 
 // MARK: - Live (placeholder)
@@ -62,6 +64,15 @@ final class LiveBusinessRepository: BusinessRepository, @unchecked Sendable {
         // the UI flows. TODO(API): add POST /businesses/{id}/memories.
         MockMarker.hit(.noBackend, "Live.addMemory", "no memories endpoint")
         return CommunityMemory(id: UUID().uuidString, author: author, text: text)
+    }
+
+    func uploadPhoto(_ jpeg: Data) async throws -> String {
+        // NO_BACKEND: there is no image-upload endpoint, so we can't host the
+        // file. Embed it as a data URL — the backend accepts arbitrary strings
+        // in galleryImageUrls and the client can render it.
+        // TODO(API): replace with a real upload (multipart or pre-signed URL).
+        MockMarker.hit(.noBackend, "Live.uploadPhoto", "no upload endpoint; using data URL")
+        return "data:image/jpeg;base64,\(jpeg.base64EncodedString())"
     }
 }
 
@@ -125,6 +136,11 @@ final class MockBusinessRepository: BusinessRepository, @unchecked Sendable {
     func addMemory(businessId: String, author: String, text: String) async throws -> CommunityMemory {
         MockMarker.hit(.mock, "MockBusinessRepository.addMemory")
         return CommunityMemory(id: UUID().uuidString, author: author, text: text)
+    }
+
+    func uploadPhoto(_ jpeg: Data) async throws -> String {
+        MockMarker.hit(.mock, "MockBusinessRepository.uploadPhoto")
+        return "data:image/jpeg;base64,\(jpeg.base64EncodedString())"
     }
 
     private func score(_ business: Business, _ profile: UserProfile) -> Int {

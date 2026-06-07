@@ -9,7 +9,7 @@ import os
 /// mocks exist only for development, previews and tests.
 @Observable
 final class AppEnvironment {
-    private static let logger = Logger(subsystem: "dev.tuist.LBI", category: "startup")
+    private static let logger = Logger(subsystem: "com.san-fo.app", category: "startup")
     let configuration: APIConfiguration
     let authService: AuthService
     let businessRepository: BusinessRepository

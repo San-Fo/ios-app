@@ -34,8 +34,15 @@ final class ProfileStore {
         myBusinesses.contains { $0.status != .raising || true } && ownsBusiness
     }
 
-    /// True if the given business belongs to the signed-in user.
+    /// When true, a demo-owned business is injected so reviewers can preview the
+    /// owner experience (extra "My Business" tab, owner-gated detail UI) without
+    /// listing a real business. Dev/demo tool only.
+    private(set) var demoOwnerEnabled = false
+
+    /// True if the given business belongs to the signed-in user. Recognises both
+    /// real ownership and the demo-owned sample business.
     func isMyBusiness(_ business: BusinessDetail) -> Bool {
+        if demoOwnerEnabled, business.id == ProfileStore.demoBusinessId { return true }
         guard let me = profile?.id, let owner = business.ownerUserId else { return false }
         return me == owner
     }
@@ -50,7 +57,34 @@ final class ProfileStore {
 
     /// Refreshes the user's own listings (call after submitting/verifying one).
     func loadMyBusinesses() async {
-        myBusinesses = (try? await businessRepository.myBusinesses()) ?? []
+        let real = (try? await businessRepository.myBusinesses()) ?? []
+        myBusinesses = demoOwnerEnabled ? real + [ProfileStore.demoBusiness] : real
+    }
+
+    /// Toggles the demo business-owner preview (dev tool only).
+    func setDemoOwner(_ enabled: Bool) async {
+        demoOwnerEnabled = enabled
+        await loadMyBusinesses()
+    }
+
+    /// A stable id used to recognise the demo-owned sample business.
+    static let demoBusinessId = "demo-owned-business"
+
+    /// The sample business shown as "owned" in demo-owner mode.
+    private static var demoBusiness: Business {
+        Business(
+            id: demoBusinessId,
+            ownerUserId: "demo-owner",
+            name: "Your Demo Business",
+            category: .restaurant,
+            district: .central,
+            storyHeadline: "A demo listing to preview the owner experience.",
+            heroImageURL: nil,
+            status: .seekingBuyer,
+            fundingGoal: 0,
+            fundingRaised: 0,
+            fundingOptions: []
+        )
     }
 
     /// Applies a mutation to the profile, updates the UI immediately, then

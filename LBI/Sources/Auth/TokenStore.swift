@@ -15,7 +15,7 @@ final class KeychainTokenStore: TokenStore, @unchecked Sendable {
     private let account: String
     private let lock = NSLock()
 
-    init(service: String = "dev.tuist.LBI.auth", account: String = "session-token") {
+    init(service: String = "com.san-fo.app.auth", account: String = "session-token") {
         self.service = service
         self.account = account
     }

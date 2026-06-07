@@ -17,7 +17,9 @@ struct ListingDraft: Equatable {
     var allowRetailOutrightPurchase: Bool = true
     var allowRetailGroupTakeover: Bool = true
     var contactEmail: String = ""
-    var photoCount: Int = 0
+    /// Photos the owner selected for the listing gallery. Stored as JPEG data;
+    /// uploaded/hosted by the backend (see `submitListing`).
+    var photos: [Data] = []
     /// Owner-set supporter reward tiers (own N support cards → unlock a perk).
     var shareRewards: [ShareReward] = []
 }
@@ -42,6 +44,13 @@ final class LiveListingRepository: ListingRepository, @unchecked Sendable {
         // so supply safe defaults when the owner leaves optional fields blank.
         let currentYear = Calendar.current.component(.year, from: Date())
         let coordinate = draft.district.centroid
+        // Photos: no upload endpoint yet, so embed as data URLs (the backend
+        // accepts arbitrary strings in galleryImageUrls).
+        // TODO(API): replace with a real upload (multipart / pre-signed URL).
+        let galleryUrls = draft.photos.map { "data:image/jpeg;base64,\($0.base64EncodedString())" }
+        if !draft.photos.isEmpty {
+            MockMarker.hit(.noBackend, "Live.submitListing.photos", "no upload endpoint; data URLs")
+        }
         let create = ListingEndpoints.CreateBusinessBody(
             name: draft.businessName,
             description: draft.founderStory.isEmpty ? draft.whyItMatters : draft.founderStory,
@@ -51,6 +60,7 @@ final class LiveListingRepository: ListingRepository, @unchecked Sendable {
             address: draft.address.isEmpty ? draft.district.displayName : draft.address,
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
+            galleryImageUrls: galleryUrls,
             financialIntent: Self.financialIntent(for: draft)
         )
         let business = try await client.send(try ListingEndpoints.createBusiness(create))

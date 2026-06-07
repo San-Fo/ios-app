@@ -6,7 +6,7 @@ import os
 ///
 /// Why this exists: the app must be trivially auditable for "is this real data
 /// or not". Every mock/stub/derived value funnels through `MockMarker`, which:
-/// - logs a 🟠 warning to the unified log (subsystem `dev.tuist.LBI`,
+/// - logs a 🟠 warning to the unified log (subsystem `com.san-fo.app`,
 ///   category `mock`) the first time each unique site fires, and
 /// - exposes `firedSites` so a debug overlay / test can assert nothing mock
 ///   ran during a "real data" session.
@@ -28,7 +28,7 @@ enum MockMarker {
         case noBackend = "NO_BACKEND"
     }
 
-    private static let logger = Logger(subsystem: "dev.tuist.LBI", category: "mock")
+    private static let logger = Logger(subsystem: "com.san-fo.app", category: "mock")
     private static let lock = NSLock()
     private static var seen = Set<String>()
     /// All marker sites that have fired this session (for debug/tests).

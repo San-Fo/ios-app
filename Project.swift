@@ -7,10 +7,11 @@ let project = Project(
             name: "LBI",
             destinations: .iOS,
             product: .app,
-            bundleId: "dev.tuist.LBI",
+            bundleId: "com.san-fo.app",
             infoPlist: .extendingDefault(
                 with: [
                     "CFBundleDisplayName": "San Fo",
+                    "NSPhotoLibraryUsageDescription": "San Fo uses your photo library so you can add photos to your business listing.",
                     "UILaunchScreen": [
                         "UIColorName": "",
                         "UIImageName": "",
@@ -30,7 +31,7 @@ let project = Project(
             name: "LBITests",
             destinations: .iOS,
             product: .unitTests,
-            bundleId: "dev.tuist.LBITests",
+            bundleId: "com.san-fo.app.tests",
             infoPlist: .default,
             buildableFolders: [
                 "LBI/Tests"

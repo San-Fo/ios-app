@@ -132,8 +132,30 @@ struct ProfileView: View {
                     .font(.lbiCaption)
                     .inkSecondaryStyle()
                     .fixedSize(horizontal: false, vertical: true)
+
+                Divider()
+
+                // Demo: simulate owning a business to preview the owner UI
+                // (extra "My Business" tab + owner-gated detail actions) without
+                // listing a real one. Owner is otherwise a derived state.
+                Toggle(isOn: demoOwnerBinding) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Demo: business owner").font(.lbiSubtitle).inkStyle()
+                        Text("Adds a sample owned business to preview the owner experience.")
+                            .font(.lbiCaption).inkSecondaryStyle()
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .tint(Theme.Palette.red)
             }
         }
+    }
+
+    private var demoOwnerBinding: Binding<Bool> {
+        Binding(
+            get: { profileStore.demoOwnerEnabled },
+            set: { enabled in Task { await profileStore.setDemoOwner(enabled) } }
+        )
     }
 
     /// Local demo preview switch only — lets reviewers preview each account

@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 /// Multi-step flow for a business owner to create a listing.
 struct ListingFlowView: View {
@@ -12,6 +13,8 @@ struct ListingFlowView: View {
     @State private var submitted = false
     @State private var newRewardCards = ""
     @State private var newRewardTitle = ""
+    /// Photos chosen via the system PhotosPicker (loaded into `draft.photos`).
+    @State private var photoSelections: [PhotosPickerItem] = []
     /// The business id returned by the backend after the listing is created.
     /// KYB verification is locked to this specific business.
     @State private var createdBusinessId: String?
@@ -141,21 +144,54 @@ struct ListingFlowView: View {
         }
     }
 
+    @ViewBuilder
     private var photoPlaceholder: some View {
-        Button {
-            draft.photoCount += 1
-        } label: {
-            VStack(spacing: Theme.Spacing.sm) {
-                Image(systemName: "photo.badge.plus").font(.system(size: 28)).foregroundStyle(Theme.Palette.red)
-                Text(draft.photoCount == 0 ? "Add photos" : "\(draft.photoCount) photo\(draft.photoCount == 1 ? "" : "s") added")
-                    .font(.lbiCaption).inkSecondaryStyle()
+        VStack(spacing: Theme.Spacing.sm) {
+            PhotosPicker(selection: $photoSelections, maxSelectionCount: 8, matching: .images) {
+                VStack(spacing: Theme.Spacing.sm) {
+                    Image(systemName: "photo.badge.plus").font(.system(size: 28)).foregroundStyle(Theme.Palette.red)
+                    Text(draft.photos.isEmpty ? "Add photos" : "\(draft.photos.count) photo\(draft.photos.count == 1 ? "" : "s") selected")
+                        .font(.lbiCaption).inkSecondaryStyle()
+                }
+                .frame(maxWidth: .infinity).padding(Theme.Spacing.lg)
+                .background(Theme.Palette.surface)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous).stroke(style: StrokeStyle(lineWidth: 1, dash: [5])).foregroundStyle(Theme.Palette.hairline))
             }
-            .frame(maxWidth: .infinity).padding(Theme.Spacing.lg)
-            .background(Theme.Palette.surface)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous).stroke(style: StrokeStyle(lineWidth: 1, dash: [5])).foregroundStyle(Theme.Palette.hairline))
+
+            // Thumbnails of the selected photos.
+            if !draft.photos.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Theme.Spacing.sm) {
+                        ForEach(Array(draft.photos.enumerated()), id: \.offset) { _, data in
+                            if let image = UIImage(data: data) {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 72, height: 72)
+                                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+                            }
+                        }
+                    }
+                }
+            }
         }
-        .buttonStyle(.plain)
+        .onChange(of: photoSelections) { _, items in
+            Task { await loadPhotos(items) }
+        }
+    }
+
+    /// Loads the picked photos into the draft as JPEG data.
+    private func loadPhotos(_ items: [PhotosPickerItem]) async {
+        var loaded: [Data] = []
+        for item in items {
+            if let data = try? await item.loadTransferable(type: Data.self),
+               let image = UIImage(data: data),
+               let jpeg = image.jpegData(compressionQuality: 0.8) {
+                loaded.append(jpeg)
+            }
+        }
+        draft.photos = loaded
     }
 
     private var rewardsStep: some View {
