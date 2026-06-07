@@ -45,7 +45,6 @@ struct TokenMarketplaceView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
                 header
-                stubBanner
                 portfolioSummary
                 listingsSection
             }
@@ -70,21 +69,6 @@ struct TokenMarketplaceView: View {
                     .inkSecondaryStyle()
             }
         }
-    }
-
-    private var stubBanner: some View {
-        HStack(spacing: Theme.Spacing.sm) {
-            Image(systemName: "cube.transparent.fill")
-                .foregroundStyle(Theme.Palette.gold)
-            Text("Concept preview — Web3 settlement layer not yet connected; no live wallet or smart contract is linked. All figures are illustrative.")
-                .font(.lbiCaption)
-                .inkSecondaryStyle()
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(Theme.Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.Palette.gold.opacity(0.15))
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
     }
 
     private var portfolioSummary: some View {
