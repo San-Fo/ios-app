@@ -10,6 +10,7 @@ let project = Project(
             bundleId: "dev.tuist.LBI",
             infoPlist: .extendingDefault(
                 with: [
+                    "CFBundleDisplayName": "Huo Ju",
                     "UILaunchScreen": [
                         "UIColorName": "",
                         "UIImageName": "",
@@ -20,7 +21,10 @@ let project = Project(
                 "LBI/Sources",
                 "LBI/Resources",
             ],
-            dependencies: []
+            entitlements: "LBI/LBI.entitlements",
+            dependencies: [
+                .external(name: "Kingfisher"),
+            ]
         ),
         .target(
             name: "LBITests",
