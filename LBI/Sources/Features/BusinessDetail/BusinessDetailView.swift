@@ -15,6 +15,8 @@ struct BusinessDetailView: View {
     @State private var showAskQuestion = false
     @State private var showProfessionalBid = false
     @State private var showRetailPurchase = false
+    @State private var showEdit = false
+    @State private var showAddMemory = false
     @State private var openedDeal: DealConversation?
     @State private var galleryIndex: String?
 
@@ -74,9 +76,7 @@ struct BusinessDetailView: View {
                     if !detail.shareRewards.isEmpty {
                         ShareRewardsCard(rewards: detail.shareRewards, ownedCards: ownedCards(for: detail))
                     }
-                    if !detail.communityMemories.isEmpty {
-                        memories(detail.communityMemories)
-                    }
+                    memoriesSection(detail)
                     Color.clear.frame(height: 80)
                 }
                 .padding(Theme.Spacing.lg)
@@ -111,6 +111,16 @@ struct BusinessDetailView: View {
         .navigationDestination(item: $openedDeal) { conversation in
             DealChatView(conversationId: conversation.id, conversation: conversation)
         }
+        .sheet(isPresented: $showEdit) {
+            EditBusinessSheet(businessId: detail.id, currentDescription: detail.summary.storyHeadline) { updated in
+                self.detail = updated
+            }
+        }
+        .sheet(isPresented: $showAddMemory) {
+            AddMemorySheet(businessId: detail.id, businessName: detail.summary.name) { memory in
+                self.detail?.communityMemories.insert(memory, at: 0)
+            }
+        }
     }
 
     /// Whether the viewer is an approved commercial investor.
@@ -118,9 +128,10 @@ struct BusinessDetailView: View {
         profileStore.profile?.isInstitutionalInvestor ?? false
     }
 
-    /// Whether the viewer is a business owner.
-    private var isOwnerView: Bool {
-        profileStore.profile?.isOwner ?? false
+    /// Whether the signed-in user owns *this* business (can edit it; cannot
+    /// buy/bid/invest in it).
+    private func isMyBusiness(_ detail: BusinessDetail) -> Bool {
+        profileStore.isMyBusiness(detail)
     }
 
     @ViewBuilder
@@ -134,7 +145,7 @@ struct BusinessDetailView: View {
     @ViewBuilder
     private func professionalSaleSection(_ detail: BusinessDetail) -> some View {
         if let sale = detail.professionalSale {
-            ProfessionalSaleCard(sale: sale, isProfessional: isInstitutionalView, isOwner: isOwnerView) {
+            ProfessionalSaleCard(sale: sale, isProfessional: isInstitutionalView, isOwner: isMyBusiness(detail)) {
                 showProfessionalBid = true
             } onAcceptBid: { bid in
                 Task { await acceptCommercialBid(saleId: sale.id, bidId: bid.id) }
@@ -362,6 +373,20 @@ struct BusinessDetailView: View {
         }
     }
 
+    /// Community memories with an "Add a memory" CTA. Any signed-in user (not
+    /// the owner of this business) can contribute a memory.
+    @ViewBuilder
+    private func memoriesSection(_ detail: BusinessDetail) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            if !detail.communityMemories.isEmpty {
+                memories(detail.communityMemories)
+            }
+            if !isMyBusiness(detail) {
+                SecondaryButton("Add a memory", systemImage: "text.bubble") { showAddMemory = true }
+            }
+        }
+    }
+
     private func memories(_ memories: [CommunityMemory]) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
             SectionHeader(title: "Community memories")
@@ -425,7 +450,10 @@ struct BusinessDetailView: View {
             }
             .buttonStyle(.plain)
 
-            if isInstitutionalView {
+            if isMyBusiness(detail) {
+                // You can't buy/bid/invest in your own business — you manage it.
+                PrimaryButton("Edit business", systemImage: "square.and.pencil") { showEdit = true }
+            } else if isInstitutionalView {
                 // Commercial investors act via the deal card (bid / terms),
                 // not consumer support or takeover-group actions.
                 if detail.professionalSale == nil {

@@ -120,10 +120,11 @@ struct ProfileView: View {
                     }
                 }
 
+                // Owner is a derived state (you own a verified business), not a
+                // switchable mode, so the picker only offers supporter/investor.
                 Picker("Account mode", selection: roleBinding(profile)) {
-                    ForEach(AccountRole.allCases, id: \.self) { role in
-                        Text(role.displayName).tag(role)
-                    }
+                    Text(AccountRole.retail.displayName).tag(AccountRole.retail)
+                    Text(AccountRole.professional.displayName).tag(AccountRole.professional)
                 }
                 .pickerStyle(.segmented)
 

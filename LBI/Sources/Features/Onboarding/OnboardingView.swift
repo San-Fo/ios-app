@@ -225,7 +225,7 @@ private struct StepScaffold<Content: View>: View {
 
 #Preview {
     OnboardingView()
-        .environment(ProfileStore(repository: MockProfileRepository()))
+        .environment(ProfileStore(repository: MockProfileRepository(), businessRepository: MockBusinessRepository()))
         .task {
             // no-op
         }

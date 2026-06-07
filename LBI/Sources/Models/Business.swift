@@ -3,6 +3,9 @@ import Foundation
 /// Core domain model for a business listing (summary form used in lists).
 struct Business: Identifiable, Equatable, Hashable {
     let id: String
+    /// Backend user id of the owner — used to tell "this is my business" so the
+    /// owner can't buy/bid/invest in their own listing and can edit it.
+    var ownerUserId: String?
     var name: String
     var category: BusinessCategory
     var district: District
@@ -22,6 +25,7 @@ struct Business: Identifiable, Equatable, Hashable {
 
     init(
         id: String,
+        ownerUserId: String? = nil,
         name: String,
         category: BusinessCategory,
         district: District,
@@ -37,6 +41,7 @@ struct Business: Identifiable, Equatable, Hashable {
         viewCount: Int = 0
     ) {
         self.id = id
+        self.ownerUserId = ownerUserId
         self.name = name
         self.category = category
         self.district = district
@@ -99,6 +104,8 @@ enum FundingKind: String, CaseIterable, Codable, Identifiable {
 struct BusinessDetail: Identifiable, Equatable {
     let id: String
     var summary: Business
+    /// Convenience passthrough to the summary's owner id.
+    var ownerUserId: String? { summary.ownerUserId }
     /// Short, evocative tagline shown under the name.
     var tagline: String
     var founderName: String

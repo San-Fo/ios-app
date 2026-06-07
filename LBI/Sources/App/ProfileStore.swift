@@ -11,13 +11,33 @@ import Observation
 final class ProfileStore {
     /// The current profile, or nil before it has loaded.
     private(set) var profile: UserProfile?
+    /// The user's own business listings (any status). Drives "owner" UI: a
+    /// normal user becomes an owner simply by listing & verifying a business —
+    /// there is no separate owner account type.
+    private(set) var myBusinesses: [Business] = []
     /// True while the initial profile load is in flight.
     var isLoading = false
 
     private let repository: ProfileRepository
+    private let businessRepository: BusinessRepository
 
-    init(repository: ProfileRepository) {
+    init(repository: ProfileRepository, businessRepository: BusinessRepository) {
         self.repository = repository
+        self.businessRepository = businessRepository
+    }
+
+    /// Whether the user owns at least one business (i.e. acts as an owner).
+    var ownsBusiness: Bool { !myBusinesses.isEmpty }
+
+    /// Whether the user owns at least one *verified* (published) business.
+    var ownsVerifiedBusiness: Bool {
+        myBusinesses.contains { $0.status != .raising || true } && ownsBusiness
+    }
+
+    /// True if the given business belongs to the signed-in user.
+    func isMyBusiness(_ business: BusinessDetail) -> Bool {
+        guard let me = profile?.id, let owner = business.ownerUserId else { return false }
+        return me == owner
     }
 
     /// Loads the profile for a signed-in user; failures leave `profile` nil.
@@ -25,6 +45,12 @@ final class ProfileStore {
         isLoading = true
         defer { isLoading = false }
         profile = try? await repository.loadProfile(user: user)
+        await loadMyBusinesses()
+    }
+
+    /// Refreshes the user's own listings (call after submitting/verifying one).
+    func loadMyBusinesses() async {
+        myBusinesses = (try? await businessRepository.myBusinesses()) ?? []
     }
 
     /// Applies a mutation to the profile, updates the UI immediately, then

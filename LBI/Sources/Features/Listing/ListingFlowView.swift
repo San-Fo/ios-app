@@ -50,6 +50,8 @@ struct ListingFlowView: View {
             if let businessId = createdBusinessId {
                 BusinessVerificationView(businessId: businessId, businessName: draft.businessName) { verified in
                     businessVerified = verified
+                    // Refresh ownership so the "My Business" tab appears.
+                    Task { await profileStore.loadMyBusinesses() }
                 }
             }
         }

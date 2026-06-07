@@ -455,8 +455,9 @@ struct LBITests {
 
     @Test func verificationGrantsRolePerProgramme() async throws {
         let repo = MockVerificationRepository()
-        // KYB grants the owner role.
-        #expect(try await repo.submit(kind: .kyb, documentLabels: ["BR"]).grantedRole == .owner)
+        // KYB grants no role — ownership is derived from owning a verified
+        // business, not from an account-role change.
+        #expect(try await repo.submit(kind: .kyb, documentLabels: ["BR"]).grantedRole == nil)
         // KYC unlocks features but grants no elevated role.
         #expect(try await repo.submit(kind: .kyc, documentLabels: ["ID"]).grantedRole == nil)
     }
@@ -468,14 +469,23 @@ struct LBITests {
         #expect(outcome.grantedRole == .professional)
     }
 
-    @Test func verifyBusinessApprovesKYBAndGrantsOwnerRole() async throws {
-        // Per-business KYB: verifying a specific listing approves KYB and makes
-        // the caller a verified business owner.
+    @Test func verifyBusinessApprovesKYBWithoutRoleChange() async throws {
+        // Per-business KYB: verifying a specific listing approves KYB. Ownership
+        // is derived (the user now owns a verified business), so there is no
+        // account-role grant.
         let repo = MockVerificationRepository()
         let outcome = try await repo.verifyBusiness(businessId: "biz-1")
         #expect(outcome.record.kind == .kyb)
         #expect(outcome.record.status == .approved)
-        #expect(outcome.grantedRole == .owner)
+        #expect(outcome.grantedRole == nil)
+    }
+
+    @Test func ownsBusinessDrivesOwnerState() async throws {
+        // A user with at least one listing is treated as an owner; the mock
+        // returns no businesses, so a fresh user is not an owner.
+        let store = await ProfileStore(repository: MockProfileRepository(), businessRepository: MockBusinessRepository())
+        await store.load(for: AuthenticatedUser(id: "u", displayName: "Demo", email: nil))
+        await #expect(store.ownsBusiness == false)
     }
 
     @Test func listingSubmissionReturnsBusinessIdForKYB() async throws {
@@ -487,7 +497,7 @@ struct LBITests {
 
     @Test func profileStoreAppliesServerGrantedRole() async throws {
         let profileRepo = MockProfileRepository()
-        let store = await ProfileStore(repository: profileRepo)
+        let store = await ProfileStore(repository: profileRepo, businessRepository: MockBusinessRepository())
         await store.load(for: AuthenticatedUser(id: "u", displayName: "Demo", email: nil))
 
         // Server grants the professional role via the outcome.

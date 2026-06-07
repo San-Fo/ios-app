@@ -13,6 +13,12 @@ protocol BusinessRepository: Sendable {
     func recommended(for profile: UserProfile?) async throws -> [Business]
     func list(query: BusinessQuery) async throws -> [Business]
     func detail(id: String) async throws -> BusinessDetail
+    /// The signed-in user's own listings (all statuses).
+    func myBusinesses() async throws -> [Business]
+    /// Owner edits limited, non-critical fields of their own listing.
+    func updateBusiness(id: String, description: String) async throws -> BusinessDetail
+    /// A normal user adds a community memory under a business page.
+    func addMemory(businessId: String, author: String, text: String) async throws -> CommunityMemory
 }
 
 // MARK: - Live (placeholder)
@@ -39,6 +45,23 @@ final class LiveBusinessRepository: BusinessRepository, @unchecked Sendable {
     func detail(id: String) async throws -> BusinessDetail {
         let dto = try await client.send(BusinessEndpoints.detail(id: id))
         return dto.toDetail()
+    }
+
+    func myBusinesses() async throws -> [Business] {
+        let dtos = try await client.send(BusinessEndpoints.mine())
+        return dtos.map { $0.toSummary() }
+    }
+
+    func updateBusiness(id: String, description: String) async throws -> BusinessDetail {
+        let dto = try await client.send(try BusinessEndpoints.update(id: id, description: description))
+        return dto.toDetail()
+    }
+
+    func addMemory(businessId: String, author: String, text: String) async throws -> CommunityMemory {
+        // NO_BACKEND: there is no community-memory endpoint yet; echo locally so
+        // the UI flows. TODO(API): add POST /businesses/{id}/memories.
+        MockMarker.hit(.noBackend, "Live.addMemory", "no memories endpoint")
+        return CommunityMemory(id: UUID().uuidString, author: author, text: text)
     }
 }
 
@@ -84,6 +107,24 @@ final class MockBusinessRepository: BusinessRepository, @unchecked Sendable {
         MockMarker.hit(.mock, "MockBusinessRepository.detail")
         guard let detail = SampleData.detail(for: id) else { throw APIError.notFound }
         return detail
+    }
+
+    func myBusinesses() async throws -> [Business] {
+        MockMarker.hit(.mock, "MockBusinessRepository.myBusinesses", "empty mock list")
+        return []
+    }
+
+    func updateBusiness(id: String, description: String) async throws -> BusinessDetail {
+        MockMarker.hit(.mock, "MockBusinessRepository.updateBusiness")
+        guard var detail = SampleData.detail(for: id) else { throw APIError.notFound }
+        detail.summary.storyHeadline = description
+        detail.tagline = description
+        return detail
+    }
+
+    func addMemory(businessId: String, author: String, text: String) async throws -> CommunityMemory {
+        MockMarker.hit(.mock, "MockBusinessRepository.addMemory")
+        return CommunityMemory(id: UUID().uuidString, author: author, text: text)
     }
 
     private func score(_ business: Business, _ profile: UserProfile) -> Int {

@@ -167,7 +167,7 @@ struct DiscoverView: View {
 
 @MainActor
 func previewProfileStore() -> ProfileStore {
-    let store = ProfileStore(repository: MockProfileRepository())
+    let store = ProfileStore(repository: MockProfileRepository(), businessRepository: MockBusinessRepository())
     var profile = UserProfile.empty(id: "p", displayName: "Mei", email: nil)
     profile.interests = [.restaurant, .bookstore]
     profile.districts = [.shamShuiPo, .wanChai]

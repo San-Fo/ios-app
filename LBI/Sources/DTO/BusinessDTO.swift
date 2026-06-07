@@ -103,6 +103,7 @@ struct BusinessDTO: Decodable {
         let target = financialIntent?.targetAmount ?? sale?.askingPrice ?? 0
         return Business(
             id: id,
+            ownerUserId: ownerUserId,
             name: name,
             category: primaryCategory,
             district: mappedDistrict,

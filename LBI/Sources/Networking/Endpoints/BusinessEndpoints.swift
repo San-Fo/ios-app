@@ -40,8 +40,18 @@ enum BusinessEndpoints {
         Endpoint(path: "me/businesses", method: .get)
     }
 
+    /// Owner edit of limited fields (`PATCH /businesses/{id}`). Only the
+    /// non-critical `description` is editable from the app.
+    static func update(id: String, description: String) throws -> Endpoint<BusinessDTO> {
+        try .json(path: "businesses/\(id)", method: .patch, body: UpdateBody(description: description))
+    }
+
     /// Increments the like count (not allowed on your own business).
     static func like(id: String) -> Endpoint<EmptyResponse> {
         Endpoint(path: "businesses/\(id)/like", method: .post)
+    }
+
+    private struct UpdateBody: Encodable {
+        let description: String
     }
 }

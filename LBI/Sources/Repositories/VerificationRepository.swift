@@ -67,12 +67,13 @@ final class LiveVerificationRepository: VerificationRepository, @unchecked Senda
     }
 
     func verifyBusiness(businessId: String) async throws -> VerificationOutcome {
-        // POST /businesses/{id}/verify marks the listing verified; this also
-        // makes the caller a verified business owner.
+        // POST /businesses/{id}/verify marks the listing verified. Ownership is
+        // a derived state (the user now owns a verified business), so no account
+        // *role* change is needed — the caller refreshes `myBusinesses` instead.
         _ = try await client.send(try VerificationEndpoints.verifyBusiness(id: businessId))
         return VerificationOutcome(
             record: VerificationRecord(kind: .kyb, status: .approved, submittedAt: Date()),
-            grantedRole: .owner
+            grantedRole: nil
         )
     }
 
@@ -130,14 +131,16 @@ final class MockVerificationRepository: VerificationRepository, @unchecked Senda
         return mutex.withLock {
             let record = VerificationRecord(kind: .kyb, status: .approved, submittedAt: Date())
             records[.kyb] = record
-            return VerificationOutcome(record: record, grantedRole: .owner)
+            // Ownership is derived from owning a verified business — no role grant.
+            return VerificationOutcome(record: record, grantedRole: nil)
         }
     }
 
     /// The role the server grants when a programme passes/is overridden.
+    /// KYB grants no role (ownership is derived); pro-investor grants professional.
     private static func roleGrant(for kind: VerificationKind) -> AccountRole? {
         switch kind {
-        case .kyb: return .owner
+        case .kyb: return nil
         case .proInvestor: return .professional
         case .kyc: return nil // Identity check unlocks features, not a role.
         }

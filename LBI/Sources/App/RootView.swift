@@ -40,7 +40,7 @@ struct RootView: View {
                     // Make the signed-in user's id available to live repos so
                     // chat messages are attributed correctly ("You" vs other).
                     environment.setCurrentUserId(user.id)
-                    let store = ProfileStore(repository: environment.profileRepository)
+                    let store = ProfileStore(repository: environment.profileRepository, businessRepository: environment.businessRepository)
                     await store.load(for: user)
                     profileStore = store
                 }
